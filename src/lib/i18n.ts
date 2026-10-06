@@ -3,6 +3,8 @@ export type Lang = 'da' | 'en';
 const da = {
 	appTitle: 'Min Kulturnat',
 	appSubtitle: 'Uofficiel planlægger · fredag 9. oktober 2026, 18–24',
+	plannerBy: 'Uofficiel planlægger lavet af',
+	when: 'fredag 9. oktober 2026, 18–24',
 	loading: 'Henter programmet…',
 	loadError: 'Programmet kunne ikke indlæses. Prøv at genindlæse siden.',
 	all: 'Alle',
@@ -68,6 +70,8 @@ const da = {
 const en: typeof da = {
 	appTitle: 'My Culture Night',
 	appSubtitle: 'Unofficial planner · Friday 9 October 2026, 18–24',
+	plannerBy: 'Unofficial planner made by',
+	when: 'Friday 9 October 2026, 18–24',
 	loading: 'Loading the programme…',
 	loadError: 'The programme could not be loaded. Try reloading the page.',
 	all: 'All',

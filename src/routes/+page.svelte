@@ -100,10 +100,21 @@
 </svelte:head>
 
 <div class="flex h-dvh flex-col">
-	<header class="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-panel pr-2 pl-3">
+	{#snippet subtitle()}
+		{t.plannerBy}
+		<a class="text-link underline" href="https://luissilva.eu" target="_blank" rel="noopener">
+			luissilva.eu
+		</a>
+		· {t.when}
+	{/snippet}
+
+	<!-- Phone: the subtitle gets its own row, or the name it credits is cut off. -->
+	<header
+		class="flex min-h-14 shrink-0 flex-wrap items-center gap-x-2 border-b border-line bg-panel pt-1 pr-2 pl-3 md:pt-0"
+	>
 		<div class="min-w-0 flex-1">
 			<h1 class="truncate leading-tight font-bold">{t.appTitle}</h1>
-			<p class="truncate text-xs text-muted">{t.appSubtitle}</p>
+			<p class="hidden truncate text-xs text-muted md:block">{@render subtitle()}</p>
 		</div>
 		<div class="flex rounded-xl bg-bg p-1" role="group" aria-label={t.language}>
 			{#each ['da', 'en'] as const as lang (lang)}
@@ -118,6 +129,7 @@
 			{/each}
 		</div>
 		<button type="button" class="btn" onclick={share}>{t.share}</button>
+		<p class="w-full truncate py-1 text-xs text-muted md:hidden">{@render subtitle()}</p>
 	</header>
 
 	{#if status !== 'ready'}
@@ -168,7 +180,7 @@
 				<MapView bind:this={mapView} inset={mapInset} />
 				<!-- Below the attribution line, which sits top-left. -->
 				<div
-					class="absolute top-9 right-2 left-2 flex flex-wrap justify-end gap-1.5 [&>.btn]:px-2.5"
+					class="absolute top-9 right-2 left-2 flex flex-wrap justify-end gap-1.5 max-md:text-sm [&>.btn]:px-2.5"
 				>
 					<button
 						type="button"
