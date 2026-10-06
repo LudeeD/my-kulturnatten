@@ -1,0 +1,121 @@
+@import 'tailwindcss';
+
+/* One dark theme: the app is meant for a phone outdoors at night. */
+@theme {
+	--color-bg: #0b0d12;
+	--color-panel: #12151c;
+	--color-raised: #1c212b;
+	--color-line: #343c4c;
+	--color-fg: #f3f5f9;
+	--color-muted: #aeb6c5;
+	--color-pick: #ffc53d;
+	--color-pick-ink: #1c1400;
+	--color-link: #7dd3fc;
+	--color-warn: #ffb59e;
+}
+
+html {
+	color-scheme: dark;
+}
+
+body {
+	overflow: hidden;
+	overscroll-behavior: none;
+	background: var(--color-bg);
+	color: var(--color-fg);
+	-webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-link);
+	outline-offset: 2px;
+}
+
+@layer components {
+	.btn {
+		display: inline-flex;
+		min-height: 3rem;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.75rem;
+		border: 1px solid var(--color-line);
+		background: var(--color-raised);
+		padding: 0 1rem;
+		font-weight: 600;
+	}
+	.btn:disabled {
+		opacity: 0.5;
+	}
+	.btn[aria-pressed='true'] {
+		border-color: var(--color-pick);
+		background: var(--color-pick);
+		color: var(--color-pick-ink);
+	}
+	.tab {
+		min-height: 2.75rem;
+		border-radius: 0.6rem;
+		font-weight: 600;
+		color: var(--color-muted);
+	}
+	.tab[aria-pressed='true'] {
+		background: var(--color-raised);
+		color: var(--color-fg);
+	}
+	.field {
+		min-height: 3rem;
+		border-radius: 0.75rem;
+		border: 1px solid var(--color-line);
+		background: var(--color-bg);
+		padding: 0 0.875rem;
+		/* 16px keeps iOS from zooming the page when the field gets focus. */
+		font-size: 1rem;
+	}
+	.field::placeholder {
+		color: var(--color-muted);
+	}
+	.link {
+		display: inline-flex;
+		align-items: center;
+		min-height: 2.5rem;
+		font-weight: 600;
+		color: var(--color-link);
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+}
+
+/* MapLibre's popup and attribution, restyled for the dark theme. */
+.maplibregl-map .maplibregl-popup-content {
+	border: 1px solid var(--color-line);
+	border-radius: 0.9rem;
+	background: var(--color-raised);
+	padding: 0.75rem;
+	color: var(--color-fg);
+	font-family: var(--default-font-family);
+	font-size: 0.95rem;
+	line-height: 1.4;
+	box-shadow: 0 10px 30px rgb(0 0 0 / 0.7);
+}
+.maplibregl-map .maplibregl-popup-anchor-top .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-top-right .maplibregl-popup-tip {
+	border-bottom-color: var(--color-raised);
+}
+.maplibregl-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
+.maplibregl-map .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
+	border-top-color: var(--color-raised);
+}
+.maplibregl-map .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+	border-right-color: var(--color-raised);
+}
+.maplibregl-map .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+	border-left-color: var(--color-raised);
+}
+.maplibregl-map .maplibregl-ctrl-attrib {
+	background: rgb(11 13 18 / 0.8);
+	color: var(--color-muted);
+}
+.maplibregl-map .maplibregl-ctrl-attrib a {
+	color: var(--color-fg);
+}

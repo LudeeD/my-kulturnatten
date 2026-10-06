@@ -1,0 +1,55 @@
+name: Fetch, build and deploy
+
+on:
+  push:
+    branches: [main]
+  # The programme gets amended, so refresh it a few times a day (times are UTC).
+  schedule:
+    - cron: '23 5,9,13,16,19 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # The script exits non-zero and leaves static/data/events.json alone when the fetch
+      # looks broken. On a scheduled run that fails the job, nothing is deployed and the
+      # previous deployment stays up. On a push or manual run the build carries on with the
+      # snapshot committed in the repository, so code changes can still go out.
+      - name: Fetch the programme
+        run: pnpm run fetch
+        continue-on-error: ${{ github.event_name != 'schedule' }}
+
+      - run: pnpm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
