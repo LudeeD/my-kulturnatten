@@ -28,3 +28,13 @@ export function formatDistance(metres: number): string {
 		? `${Math.max(50, Math.round(metres / 50) * 50)} m`
 		: `${(metres / 1000).toFixed(1)} km`;
 }
+
+// Below this, cycling saves no time worth mentioning.
+const BIKE_FROM_METRES = 500;
+
+/** "350 m · walk 6 min", plus the cycling time for longer distances. */
+export function travel(metres: number, words: { walk: string; bike: string }): string {
+	const parts = [formatDistance(metres), `${words.walk} ${walkMinutes(metres)} min`];
+	if (metres >= BIKE_FROM_METRES) parts.push(`${words.bike} ${bikeMinutes(metres)} min`);
+	return parts.join(' · ');
+}

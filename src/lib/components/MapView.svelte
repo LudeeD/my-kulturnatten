@@ -14,6 +14,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { placed, planner, type TransitKind } from '#lib/planner.svelte.ts';
 	import { range } from '#lib/time.ts';
+	import type { KnEvent } from '#lib/types.ts';
 	import FavButton from './FavButton.svelte';
 
 	setWorkerUrl(workerUrl);
@@ -30,6 +31,8 @@
 	// is which, so the metro lines and stations come from our own small file
 	// (scripts/fetch-metro.ts), which knows their names and colours.
 	const TRAIN = '#a79bff';
+	// Stations are background: the events are what the map is for.
+	const STATION_OPACITY = 0.6;
 	const TRANSIT_LAYERS: Record<TransitKind, string[]> = {
 		metroLines: ['metro-lines', 'metro-line-names'],
 		metroStations: ['metro-stations', 'metro-station-names'],
@@ -38,8 +41,16 @@
 	};
 	const isMetro = ['==', ['get', 'subclass'], 'subway'] as ['==', ['get', string], string];
 
-	/** Height of the pull-up list covering the bottom of the map (phone only). */
-	let { inset = 0 }: { inset?: number } = $props();
+	// Below this zoom the quiet dots are grouped, or the city centre is an untappable smear.
+	const CLUSTER_BELOW_ZOOM = 14;
+
+	interface Props {
+		/** Height of the pull-up list covering the bottom of the map (phone only). */
+		inset?: number;
+		/** Show a popup at the selected marker. Off on phones, where the list shows the event. */
+		popup?: boolean;
+	}
+	let { inset = 0, popup: showPopup = true }: Props = $props();
 
 	let container: HTMLDivElement;
 	let popupEl: HTMLDivElement;
@@ -51,7 +62,47 @@
 	const selected = $derived(planner.selected);
 
 	// The top leaves room for the popup, which always opens above its marker.
-	const padding = () => ({ top: 240, bottom: inset + 30, left: 40, right: 40 });
+	const padding = () => ({ top: showPopup ? 240 : 70, bottom: inset + 30, left: 40, right: 60 });
+
+	const points = (events: KnEvent[]) => ({
+		type: 'FeatureCollection' as const,
+		features: events.filter(placed).map((e) => ({
+			type: 'Feature' as const,
+			geometry: { type: 'Point' as const, coordinates: [e.lng, e.lat] },
+			properties: { id: e.id, label: e.no ? String(e.no) : '★', pick: planner.picks.has(e.id) }
+		}))
+	});
+	const source = (id: string) => map!.getSource(id) as GeoJSONSource;
+
+	function flyTo(at: { lat: number; lng: number }) {
+		map?.flyTo({
+			center: [at.lng, at.lat],
+			zoom: Math.max(map.getZoom(), 15),
+			padding: padding(),
+			duration: 900
+		});
+	}
+
+	let watching = false;
+	/** Shows the user's position and moves the map there. Asks for permission the first time. */
+	export function locate() {
+		if (planner.me) return flyTo(planner.me);
+		if (watching) return;
+		if (!('geolocation' in navigator)) return planner.notify(t.locationFailed);
+		watching = true;
+		navigator.geolocation.watchPosition(
+			(pos) => {
+				const first = planner.me === null;
+				planner.me = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+				if (first) flyTo(planner.me);
+			},
+			() => {
+				watching = false;
+				planner.notify(t.locationFailed);
+			},
+			{ enableHighAccuracy: true, maximumAge: 10_000 }
+		);
+	}
 
 	export function fitPicks() {
 		const picks = planner.events.filter((e) => planner.picks.has(e.id)).filter(placed);
@@ -86,10 +137,18 @@
 		}).setDOMContent(popupEl);
 
 		m.on('load', () => {
-			m.addSource('events', {
+			const empty = { type: 'FeatureCollection' as const, features: [] };
+			// Picks are never clustered; the rest is, when zoomed out.
+			m.addSource('others', {
 				type: 'geojson',
-				data: { type: 'FeatureCollection', features: [] }
+				data: empty,
+				cluster: true,
+				clusterMaxZoom: CLUSTER_BELOW_ZOOM - 1,
+				clusterRadius: 34
 			});
+			m.addSource('picks', { type: 'geojson', data: empty });
+			m.addSource('selected', { type: 'geojson', data: empty });
+			m.addSource('me', { type: 'geojson', data: empty });
 			m.addSource('metro', { type: 'geojson', data: asset('data/metro.json') });
 			m.addLayer({
 				id: 'train-lines',
@@ -154,10 +213,12 @@
 				minzoom: 12,
 				filter: trainStation,
 				paint: {
-					'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 3, 16, 6],
+					'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 2, 16, 5],
 					'circle-color': '#0b0d12',
+					'circle-opacity': STATION_OPACITY,
 					'circle-stroke-color': TRAIN,
-					'circle-stroke-width': 2
+					'circle-stroke-opacity': STATION_OPACITY,
+					'circle-stroke-width': 1.5
 				}
 			});
 			m.addLayer({
@@ -165,7 +226,7 @@
 				type: 'symbol',
 				source: 'openmaptiles',
 				'source-layer': 'poi',
-				minzoom: 13,
+				minzoom: 14,
 				filter: trainStation,
 				layout: {
 					'text-field': ['get', 'name'],
@@ -176,6 +237,7 @@
 				},
 				paint: {
 					'text-color': TRAIN,
+					'text-opacity': STATION_OPACITY,
 					'text-halo-color': '#0b0d12',
 					'text-halo-width': 1.5
 				}
@@ -194,54 +256,80 @@
 						['linear'],
 						['zoom'],
 						11,
-						['+', 2, ['*', 2, ['get', 'ring']]],
+						['+', 1.5, ['*', 1.5, ['get', 'ring']]],
 						16,
-						['+', 5, ['*', 3.5, ['get', 'ring']]]
+						['+', 4, ['*', 3, ['get', 'ring']]]
 					],
 					'circle-color': '#0b0d12',
+					'circle-opacity': STATION_OPACITY,
 					'circle-stroke-color': ['get', 'colour'],
-					'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 11, 1.5, 16, 3]
+					'circle-stroke-opacity': STATION_OPACITY,
+					'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 11, 1, 16, 2.5]
 				}
 			});
 			m.addLayer({
 				id: 'metro-station-names',
 				type: 'symbol',
 				source: 'metro',
-				minzoom: 13,
+				minzoom: 14,
 				filter: ['all', ['==', ['get', 'kind'], 'station'], ['==', ['get', 'ring'], 0]],
 				layout: {
 					'text-field': ['get', 'name'],
-					'text-font': ['Noto Sans Bold'],
+					'text-font': ['Noto Sans Regular'],
 					'text-size': 12,
 					'text-anchor': 'top',
 					'text-offset': [0, 1]
 				},
 				paint: {
 					// The rings carry the line colours; dark green or red text is hard to read here.
-					'text-color': '#f3f5f9',
+					'text-color': '#aeb6c5',
 					'text-halo-color': '#0b0d12',
 					'text-halo-width': 1.5
 				}
 			});
-			// Everything that is not a pick: visible but quiet.
 			m.addLayer({
-				id: 'others',
+				id: 'clusters',
 				type: 'circle',
-				source: 'events',
-				filter: ['!', ['get', 'pick']],
+				source: 'others',
+				filter: ['has', 'point_count'],
 				paint: {
-					'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 3.5, 15, 6.5],
-					'circle-color': '#8590a8',
-					'circle-opacity': 0.85,
+					'circle-radius': ['step', ['get', 'point_count'], 13, 10, 17, 30, 21],
+					'circle-color': '#55607a',
+					'circle-opacity': 0.9,
 					'circle-stroke-color': '#0b0d12',
 					'circle-stroke-width': 1
 				}
 			});
 			m.addLayer({
+				id: 'cluster-counts',
+				type: 'symbol',
+				source: 'others',
+				filter: ['has', 'point_count'],
+				layout: {
+					'text-field': ['get', 'point_count_abbreviated'],
+					'text-font': ['Noto Sans Bold'],
+					'text-size': 12,
+					'text-allow-overlap': true
+				},
+				paint: { 'text-color': '#f3f5f9' }
+			});
+			// Everything that is not a pick: visible but quiet.
+			m.addLayer({
+				id: 'others',
+				type: 'circle',
+				source: 'others',
+				filter: ['!', ['has', 'point_count']],
+				paint: {
+					'circle-radius': ['interpolate', ['linear'], ['zoom'], 11, 4.5, 15, 7],
+					'circle-color': '#9aa5bd',
+					'circle-stroke-color': '#0b0d12',
+					'circle-stroke-width': 1.5
+				}
+			});
+			m.addLayer({
 				id: 'picks',
 				type: 'circle',
-				source: 'events',
-				filter: ['get', 'pick'],
+				source: 'picks',
 				paint: {
 					'circle-radius': 14,
 					'circle-color': '#ffc53d',
@@ -252,8 +340,7 @@
 			m.addLayer({
 				id: 'pick-numbers',
 				type: 'symbol',
-				source: 'events',
-				filter: ['get', 'pick'],
+				source: 'picks',
 				layout: {
 					'text-field': ['get', 'label'],
 					'text-font': ['Noto Sans Bold'],
@@ -266,8 +353,7 @@
 			m.addLayer({
 				id: 'selected',
 				type: 'circle',
-				source: 'events',
-				filter: ['==', ['get', 'id'], -1],
+				source: 'selected',
 				paint: {
 					'circle-radius': ['case', ['get', 'pick'], 19, 11],
 					'circle-color': 'rgba(0,0,0,0)',
@@ -275,19 +361,30 @@
 					'circle-stroke-width': 3
 				}
 			});
+			m.addLayer({
+				id: 'me',
+				type: 'circle',
+				source: 'me',
+				paint: {
+					'circle-radius': 8,
+					'circle-color': '#3b9dff',
+					'circle-stroke-color': '#ffffff',
+					'circle-stroke-width': 3
+				}
+			});
 			ready = true;
 		});
 
-		m.on('click', (ev) => {
+		m.on('click', async (ev) => {
 			const { x, y } = ev.point;
 			const hits = m.queryRenderedFeatures(
 				[
 					[x - TAP_RADIUS, y - TAP_RADIUS],
 					[x + TAP_RADIUS, y + TAP_RADIUS]
 				],
-				{ layers: ['others', 'picks'] }
+				{ layers: ['clusters', 'others', 'picks'] }
 			);
-			let best: number | null = null;
+			let best: (typeof hits)[number] | undefined;
 			let bestDistance = Infinity;
 			for (const f of hits) {
 				if (f.geometry.type !== 'Point') continue;
@@ -296,12 +393,19 @@
 				const distance = Math.hypot(at.x - x, at.y - y) - (f.properties.pick ? 8 : 0);
 				if (distance < bestDistance) {
 					bestDistance = distance;
-					best = f.properties.id;
+					best = f;
 				}
 			}
-			planner.select(best, 'map');
+			if (!best || best.geometry.type !== 'Point') return planner.close();
+			if (best.properties.cluster) {
+				// A group of events: zoom in until it splits.
+				const zoom = await source('others').getClusterExpansionZoom(best.properties.cluster_id);
+				m.easeTo({ center: best.geometry.coordinates as [number, number], zoom, duration: 500 });
+			} else {
+				planner.select(best.properties.id, 'map');
+			}
 		});
-		for (const layer of ['others', 'picks']) {
+		for (const layer of ['clusters', 'others', 'picks']) {
 			m.on('mouseenter', layer, () => (m.getCanvas().style.cursor = 'pointer'));
 			m.on('mouseleave', layer, () => (m.getCanvas().style.cursor = ''));
 		}
@@ -314,20 +418,31 @@
 	$effect(() => {
 		if (!ready || !map) return;
 		const picks = planner.picks;
-		const features = planner.events
-			.filter(placed)
-			.filter(
-				(e) =>
-					picks.has(e.id) ||
-					e.id === planner.selectedId ||
-					(!planner.hideOthers && planner.matches(e))
+		source('picks').setData(points(planner.events.filter((e) => picks.has(e.id))));
+		source('others').setData(
+			points(
+				planner.hideOthers
+					? []
+					: planner.events.filter((e) => !picks.has(e.id) && planner.matches(e))
 			)
-			.map((e) => ({
-				type: 'Feature' as const,
-				geometry: { type: 'Point' as const, coordinates: [e.lng, e.lat] },
-				properties: { id: e.id, label: e.no ? String(e.no) : '★', pick: picks.has(e.id) }
-			}));
-		(map.getSource('events') as GeoJSONSource).setData({ type: 'FeatureCollection', features });
+		);
+	});
+
+	$effect(() => {
+		if (!ready || !map) return;
+		const me = planner.me;
+		source('me').setData({
+			type: 'FeatureCollection',
+			features: me
+				? [
+						{
+							type: 'Feature',
+							geometry: { type: 'Point', coordinates: [me.lng, me.lat] },
+							properties: {}
+						}
+					]
+				: []
+		});
 	});
 
 	$effect(() => {
@@ -340,11 +455,14 @@
 
 	$effect(() => {
 		if (!ready || !map || !popup) return;
-		map.setFilter('selected', ['==', ['get', 'id'], selected?.id ?? -1]);
+		// Its own source, so the ring shows even when the event is hidden or inside a cluster.
+		void planner.picks;
+		source('selected').setData(points(selected ? [selected] : []));
 		if (!selected || !placed(selected)) return void popup.remove();
 		const at: [number, number] = [selected.lng, selected.lat];
-		popup.setLngLat(at).addTo(map);
-		// A marker tapped near the top edge or just above the list: nudge it so the popup fits.
+		if (showPopup) popup.setLngLat(at).addTo(map);
+		else popup.remove();
+		// A marker tapped near an edge or just above the list: nudge it into the clear.
 		const { top, bottom } = padding();
 		const y = map.project(at).y;
 		if (
@@ -361,20 +479,9 @@
 		if (!ready || !map) return;
 		untrack(() => {
 			const e = planner.selected;
-			if (!e || !placed(e)) return;
-			map!.flyTo({
-				center: [e.lng, e.lat],
-				zoom: Math.max(map!.getZoom(), 15),
-				padding: padding(),
-				duration: 900
-			});
+			if (e && placed(e)) flyTo(e);
 		});
 	});
-
-	function openDetails() {
-		if (planner.sheet === 'peek') planner.sheet = 'half';
-		planner.scrollTick++;
-	}
 </script>
 
 <div bind:this={container} class="h-full w-full"></div>
@@ -394,10 +501,7 @@
 					{#if selected.signupRequired}<span class="text-warn"> · {t.signupRequired}</span>{/if}
 				</p>
 			</div>
-			<div class="flex gap-2">
-				<FavButton id={selected.id} withLabel />
-				<button type="button" class="btn md:hidden" onclick={openDetails}>{t.details}</button>
-			</div>
+			<div class="flex"><FavButton id={selected.id} withLabel /></div>
 		{/if}
 	</div>
 </div>

@@ -5,7 +5,10 @@ declare global {
 		// interface Error {}
 		// interface Locals {}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			/** Event details are open; going back closes them. */
+			detail?: boolean;
+		}
 		// interface Platform {}
 	}
 }

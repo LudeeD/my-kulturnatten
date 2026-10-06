@@ -4,21 +4,17 @@
 	let { id, withLabel = false }: { id: number; withLabel?: boolean } = $props();
 
 	const picked = $derived(planner.picks.has(id));
-	const locked = $derived(planner.shared !== null);
-	const label = $derived(
-		locked ? planner.t.sharedLocked : picked ? planner.t.unpick : planner.t.pick
-	);
+	const label = $derived(picked ? planner.t.unpick : planner.t.pick);
 </script>
 
 <button
 	type="button"
-	class="flex min-h-12 min-w-12 shrink-0 items-center justify-center gap-2 rounded-xl disabled:opacity-60
+	class="flex min-h-12 min-w-12 shrink-0 items-center justify-center gap-2 rounded-xl
 		{withLabel ? 'flex-1 border border-line px-3 font-semibold' : ''}
 		{picked ? 'text-pick' : 'text-muted'}"
 	aria-pressed={picked}
 	aria-label={withLabel ? undefined : label}
 	title={label}
-	disabled={locked}
 	onclick={() => planner.toggle(id)}
 >
 	<svg viewBox="0 0 24 24" class="size-7" aria-hidden="true">

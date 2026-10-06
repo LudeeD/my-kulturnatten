@@ -4,5 +4,7 @@
 		"strict": true,
 		"types": ["$app/types", "node"]
 	},
-	"include": ["src", "scripts", "vite.config.ts"]
+	"include": ["src", "scripts", "vite.config.ts"],
+	// Runs in a worker, not the page: SvelteKit builds it separately.
+	"exclude": ["src/service-worker.ts"]
 }

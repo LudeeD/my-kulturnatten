@@ -51,6 +51,27 @@ body {
 		background: var(--color-pick);
 		color: var(--color-pick-ink);
 	}
+	.btn-primary {
+		border-color: var(--color-pick);
+		background: var(--color-pick);
+		color: var(--color-pick-ink);
+	}
+	/* Square icon-only button, for the controls floating on the map. */
+	.btn-icon {
+		width: 2.75rem;
+		min-height: 2.75rem;
+		padding: 0;
+	}
+	.menu-item {
+		display: flex;
+		width: 100%;
+		min-height: 3rem;
+		align-items: center;
+		border-radius: 0.6rem;
+		padding: 0 0.75rem;
+		text-align: left;
+		font-weight: 600;
+	}
 	.tab {
 		min-height: 2.75rem;
 		border-radius: 0.6rem;

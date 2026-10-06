@@ -38,16 +38,19 @@ pnpm run preview   # serve build/ locally
 ```
 
 - `src/lib/planner.svelte.ts`: all app state (picks, filters, selection, language, shared links).
-- `src/lib/components/`: the list, the event card with its details, the map.
+- `src/lib/components/`: the list, the event row, the event details view, the map.
+- `src/service-worker.ts`: caches the app and the programme so the list still works offline.
+  Map tiles are not cached.
 - `src/lib/geo.ts`: distances and the rough walking and cycling times shown under an open event.
   There is no routing; times are straight-line distance times 1.3.
 - `src/lib/i18n.ts`: Danish and English UI strings, and English names for the programme's
   Danish-only category labels.
 
-Picks are stored in `localStorage` and mirrored in the URL as programme numbers
-(`#p=201,514,766`). Opening a link with other picks shows them as a shared plan until you choose
-to add them to yours, replace yours, or go back. If you have no picks of your own, the linked
-plan becomes yours.
+Picks live in named lists, stored in `localStorage`. The active list is mirrored in the URL as
+programme numbers plus the list's name (`#p=201,514,766&n=Ana`), so sharing the page shares that
+list. Opening a link to a list you don't have shows it as a shared list until you save it as a
+new list of your own, add its picks to your active list, or dismiss it. If you have no picks at
+all, the linked list simply becomes yours.
 
 ## Deploy
 
