@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body style="margin:0">
+<title>Culture Night Route</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: the whole plan on one screen. Map with named pins on top; each tier is one row of name chips; tapping a chip opens its details in place and chips are dragged between tiers (press and hold on touch). New places land in Unsorted. */
+:root {
+  --stage: #cdd4e6; --bezel: #121a33;
+  --bg: #e9edf7; --surface: #ffffff; --line: #c3cbe0; --fg: #121a33; --muted: #56617f;
+  --lamp: #f5b83d; --on-lamp: #2a1c00; --busy: #a8362c;
+  --p1: #3b6fd4; --p2: #b0478f; --p3: #2e8a6b; --on-av: #ffffff;
+  --sheet: #121a33; --sheet-fg: #f1f3fa; --sheet-muted: #a9b3cf; --sheet-line: #2e3a5e;
+  --display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --stage: #050916; --bezel: #323e63;
+    --bg: #0e1630; --surface: #18223f; --line: #34416a; --fg: #eef0f8; --muted: #a0abc8;
+    --lamp: #ffc857; --on-lamp: #2a1c00; --busy: #ff9a8a;
+    --sheet: #050a1a; --sheet-fg: #f1f3fa; --sheet-muted: #a9b3cf; --sheet-line: #2e3a5e;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --stage: #050916; --bezel: #323e63;
+  --bg: #0e1630; --surface: #18223f; --line: #34416a; --fg: #eef0f8; --muted: #a0abc8;
+  --lamp: #ffc857; --on-lamp: #2a1c00; --busy: #ff9a8a;
+  --sheet: #050a1a; --sheet-fg: #f1f3fa; --sheet-muted: #a9b3cf; --sheet-line: #2e3a5e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--stage); color: var(--fg); font-family: var(--body); font-size: 1rem; line-height: 1.4; }
+
+.stage { height: 100%; display: grid; place-items: center; padding-inline: 16px; padding-block: 1rem; }
+.app {
+  position: relative; width: 100%; max-width: 390px; height: min(844px, 100%);
+  background: var(--bg); border: 10px solid var(--bezel); border-radius: 46px;
+  overflow: hidden; display: flex; flex-direction: column;
+  box-shadow: 0 24px 60px -20px rgb(0 0 0 / .45);
+  counter-reset: picked 1;
+}
+.statusbar { flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: .6rem 1.4rem .35rem; font-size: .8rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.statusbar i { width: 5.5rem; height: 1.5rem; border-radius: 999px; background: var(--bezel); }
+.statusbar span:last-child { text-align: right; }
+.screen { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-inline: 16px; padding-block: .75rem 2rem; display: flex; flex-direction: column; gap: 1rem; }
+@media (max-width: 480px) {
+  .stage { padding: 0; display: block; }
+  .app { max-width: none; height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+  .statusbar { display: none; }
+  .sheet { padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
+
+.screen > * { flex: none; }
+h1 { font-family: var(--display); font-weight: 700; font-size: 1.15rem; margin: 0; }
+h1 span { color: var(--muted); font-weight: 500; }
+h2 { font-family: var(--display); font-weight: 700; font-size: 1.05rem; line-height: 2rem; margin: 0; }
+
+/* Map */
+.map { display: block; width: 100%; height: auto; background: var(--surface); border-radius: 16px; }
+.map .bg { fill: var(--line); }
+.map .m { display: none; }
+.map .edge { stroke: var(--lamp); stroke-width: 3; stroke-linecap: round; }
+.map .pin { fill: var(--lamp); stroke: var(--surface); stroke-width: 2; }
+.map .cand { fill: var(--surface); stroke: var(--fg); stroke-width: 1.5; }
+.map text { font-family: var(--body); font-size: 10px; font-weight: 600; text-anchor: middle; }
+.map .pt { fill: var(--on-lamp); }
+.map .ct { fill: var(--fg); }
+
+.map .edge { fill: none; stroke: var(--lamp); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.group { display: flex; align-items: center; gap: .5rem; font-size: .78rem; color: var(--muted); }
+.av { display: inline-grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; font-style: normal; font-size: .68rem; font-weight: 600; color: var(--on-av); margin-left: -.3rem; box-shadow: 0 0 0 2px var(--bg); }
+.av:first-child { margin-left: 0; }
+.av.m { background: var(--p1); } .av.j { background: var(--p2); } .av.s { background: var(--p3); }
+.av.me { background: var(--fg); color: var(--bg); width: auto; padding-inline: .45rem; border-radius: 999px; }
+.avs .me { display: none; }
+
+/* Tiers as rows of chips */
+.app { --t1: var(--lamp); --t2: color-mix(in srgb, var(--lamp) 55%, var(--surface)); --t3: color-mix(in srgb, var(--lamp) 22%, var(--surface)); --t4: var(--surface); --t0: transparent;
+  --k1: var(--lamp); --k2: var(--lamp); --k3: var(--muted); --k4: var(--muted); --k0: var(--muted); }
+.inputs input, .seg input, .tog input, .yes input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
+.map .mk { fill: var(--f); stroke: var(--k); stroke-width: 1.5; }
+.map .ring { display: none; fill: none; stroke: var(--fg); stroke-width: 2; }
+.map .n { display: none; fill: var(--fg); font-size: 9.5px; }
+.map .nm { fill: var(--muted); font-size: 9.5px; font-weight: 500; paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.pool { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+.th { flex: 0 0 100%; display: flex; align-items: center; gap: .6rem; margin-top: .55rem; }
+.h1 { order: 10; margin-top: 0; } .h2 { order: 20; } .h3 { order: 30; } .h4 { order: 40; } .h0 { order: 50; }
+.th b { flex: none; width: 1.7rem; height: 1.7rem; border-radius: 50%; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: .95rem; border: 1.5px solid var(--muted); }
+.h1 b { background: var(--t1); border-color: var(--k1); color: var(--on-lamp); }
+.h2 b { background: var(--t2); border-color: var(--k2); }
+.h3 b { background: var(--t3); }
+.th input { flex: 1; min-width: 0; font: inherit; font-size: .875rem; font-weight: 600; color: var(--fg); background: transparent; border: 0; border-bottom: 1.5px solid var(--line); padding: .25rem 0; border-radius: 0; }
+.th input::placeholder { color: var(--muted); font-weight: 400; opacity: 1; }
+.th input:focus-visible { outline: none; border-bottom-color: var(--fg); }
+.th .rule { flex: 1; height: 1.5px; background: var(--line); }
+.h0 span { font-size: .875rem; font-weight: 600; flex: 1; border-bottom: 1.5px solid var(--line); padding: .25rem 0; }
+.h0 b { border-style: dashed; font-family: var(--body); font-size: .8rem; }
+
+.mv { display: none; flex: none; align-items: center; font-size: .8rem; font-weight: 600; border: 1.5px solid var(--fg); border-radius: 999px; padding: .25rem .7rem; cursor: pointer; white-space: nowrap; }
+.chip { display: inline-flex; align-items: center; gap: .45rem; max-width: 100%; background: var(--f); border: 1.5px solid var(--k); border-radius: 999px; padding: .4rem .5rem .4rem .8rem; font-weight: 600; font-size: .9rem; cursor: pointer; }
+.chip { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.chip.lift { opacity: .3; }
+.chip.ghost { position: fixed; z-index: 50; margin: 0; pointer-events: none; outline: none !important; transform: scale(1.06) rotate(-2deg); box-shadow: 0 10px 24px -8px rgb(0 0 0 / .5); }
+.th.drop { outline: 2px dashed var(--fg); outline-offset: 4px; border-radius: 10px; background: var(--surface); }
+.dragging .mv { visibility: hidden; }
+.chip > span { min-width: 0; overflow-wrap: anywhere; }
+.cnt { flex: none; min-width: 1.35rem; height: 1.35rem; padding-inline: .3rem; border-radius: 999px; display: grid; place-items: center; background: var(--fg); color: var(--bg); font-size: .72rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cnt .n1 { display: none; }
+
+.det { display: none; flex: 0 0 100%; background: var(--surface); border-radius: 14px; padding: .8rem .85rem; margin-block: .15rem .1rem; }
+.det p { margin: 0; }
+.dh { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+h3 { font-family: var(--display); font-weight: 700; font-size: 1.05rem; line-height: 1.2; margin: 0; }
+.close { font-size: .8rem; font-weight: 600; color: var(--muted); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.hook { font-size: .875rem; color: var(--muted); margin-top: .2rem !important; }
+.facts { font-size: .8rem; font-weight: 600; margin-top: .35rem !important; font-variant-numeric: tabular-nums; }
+.warn { color: var(--busy); font-weight: 600; font-size: .8rem; margin-top: .3rem !important; }
+.who { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-top: .65rem; }
+.avs { display: flex; align-items: center; padding-left: 2px; }
+.avs .av { box-shadow: 0 0 0 2px var(--surface); }
+.det:has(.inbox:checked) .avs .me { display: inline-grid; }
+.note { display: flex; gap: .5rem; align-items: flex-start; margin-top: .55rem !important; font-size: .85rem; }
+.note .av { flex: none; box-shadow: none; }
+.move { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; margin-top: .75rem; padding-top: .7rem; border-top: 1px solid var(--line); }
+.lbl { font-size: .8rem; color: var(--muted); }
+.seg { display: flex; gap: 2px; background: var(--bg); border-radius: 999px; padding: 3px; }
+.seg label { position: relative; min-width: 1.8rem; height: 1.8rem; padding-inline: .55rem; border-radius: 999px; display: grid; place-items: center; font-weight: 600; font-size: .85rem; color: var(--muted); cursor: pointer; }
+.seg label:has(:checked) { color: var(--fg); box-shadow: inset 0 0 0 1.5px var(--muted); background: var(--surface); }
+.seg .s1:has(:checked) { background: var(--t1); color: var(--on-lamp); box-shadow: none; }
+.seg .s2:has(:checked) { background: var(--t2); box-shadow: inset 0 0 0 1.5px var(--k2); }
+.seg .s3:has(:checked) { background: var(--t3); }
+.foot { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-top: .7rem; padding-top: .65rem; border-top: 1px solid var(--line); font-size: .8rem; color: var(--muted); }
+.by1 { display: none; }
+.rm { text-align: right; }
+.rm summary { list-style: none; cursor: pointer; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.rm summary::-webkit-details-marker { display: none; }
+.rm[open] summary { display: none; }
+.yes { position: relative; font-weight: 600; color: var(--busy); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; margin-left: .3rem; }
+.tog { position: relative; display: inline-flex; align-items: center; font-size: .85rem; font-weight: 600; border: 1.5px solid var(--line); border-radius: 999px; padding: .35rem .8rem; cursor: pointer; white-space: nowrap; }
+.tog .on { display: none; }
+.tog:has(:checked) { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.tog:has(:checked) .on { display: inline; }
+.tog:has(:checked) .off { display: none; }
+:is(.tog, .seg label, .yes):has(:focus-visible), .rm summary:focus-visible, .add summary:focus-visible, .inv summary:focus-visible { outline: 3px solid var(--fg); outline-offset: 2px; border-radius: 6px; }
+
+/* Add and invite */
+.add { order: 60; flex: 0 0 100%; }
+.add summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: .35rem; border: 1.5px dashed var(--muted); border-radius: 999px; padding: .4rem .85rem; font-weight: 600; font-size: .9rem; }
+.add summary::-webkit-details-marker, .inv summary::-webkit-details-marker { display: none; }
+.add summary::before { content: "+"; font-size: 1.05rem; line-height: 1; }
+.add ul { list-style: none; margin: .5rem 0 0; padding: .1rem .85rem; background: var(--surface); border-radius: 14px; }
+.arow { display: none; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; align-items: center; padding-block: .65rem; border-top: 1px solid var(--line); }
+.arow:first-child, .arow[class]:not(.x):first-of-type { border-top: 0; }
+.arow p { margin: 0; }
+.add .empty { display: block; padding-block: .65rem; font-size: .875rem; color: var(--muted); }
+.app:has(.ro:checked) .add .empty { display: none; }
+.inv { position: relative; }
+.inv summary { list-style: none; cursor: pointer; font-size: .8rem; font-weight: 600; border: 1.5px solid var(--line); border-radius: 999px; padding: .25rem .7rem; }
+.inv p { position: absolute; right: 0; top: calc(100% + .4rem); z-index: 3; width: 15rem; max-width: calc(100vw - 4rem); margin: 0; background: var(--sheet); color: var(--sheet-fg); border-radius: 12px; padding: .7rem .8rem; font-size: .8rem; }
+.inv code { display: block; margin-top: .35rem; font-family: ui-monospace, Menlo, monospace; font-size: .8rem; user-select: all; overflow-wrap: anywhere; }
+.group { gap: .6rem; }
+
+/* Generated: where each place sits, on the list and on the map */
+.app:has(#pB_1:checked) .c-B{order:11;--f:var(--t1);--k:var(--k1)}
+.app:has(#pB_1:checked) .d-B{order:12}
+.app:has(#pB_1:checked) .mB{--f:var(--t1);--k:var(--k1)}
+.app:has(#pB_1:checked) .mB .n1{display:inline}
+.app:has(#pB_2:checked) .c-B{order:21;--f:var(--t2);--k:var(--k2)}
+.app:has(#pB_2:checked) .d-B{order:22}
+.app:has(#pB_2:checked) .mB{--f:var(--t2);--k:var(--k2)}
+.app:has(#pB_2:checked) .mB .n2{display:inline}
+.app:has(#pB_3:checked) .c-B{order:31;--f:var(--t3);--k:var(--k3)}
+.app:has(#pB_3:checked) .d-B{order:32}
+.app:has(#pB_3:checked) .mB{--f:var(--t3);--k:var(--k3)}
+.app:has(#pB_3:checked) .mB .n3{display:inline}
+.app:has(#pB_4:checked) .c-B{order:41;--f:var(--t4);--k:var(--k4)}
+.app:has(#pB_4:checked) .d-B{order:42}
+.app:has(#pB_4:checked) .mB{--f:var(--t4);--k:var(--k4)}
+.app:has(#pB_4:checked) .mB .n4{display:inline}
+.app:has(#pB_0:checked) .c-B{order:51;--f:var(--t0);--k:var(--k0)}
+.app:has(#pB_0:checked) .d-B{order:52}
+.app:has(#pB_0:checked) .mB{--f:var(--t0);--k:var(--k0)}
+.app:has(#pB_0:checked) .c-B{border-style:dashed}
+.app:has(#pB_o:checked) :is(.c-B,.d-B,.mB){display:none}
+.app:has(#pB_o:checked) .a-B{display:grid}
+.app:has(#selB:checked) .d-B{display:block}
+.app:has(#selB:checked) .c-B{outline:2.5px solid var(--fg);outline-offset:1px}
+.app:has(#selB:checked) .mB .ring{display:inline}
+.app:has(#selB:checked) .mB .nm{font-weight:700;fill:var(--fg)}
+.app:has(#selB:focus-visible) .c-B{outline:3px solid var(--fg);outline-offset:3px}
+.app:has(#inB:checked) .c-B .n1{display:inline}
+.app:has(#inB:checked) .c-B .n0{display:none}
+.app:not(:has(#pB_1:checked)) .d-B .by1{display:inline}
+.app:not(:has(#pB_1:checked)) .d-B .by0{display:none}
+.app:has(#pA_1:checked) .c-A{order:11;--f:var(--t1);--k:var(--k1)}
+.app:has(#pA_1:checked) .d-A{order:12}
+.app:has(#pA_1:checked) .mA{--f:var(--t1);--k:var(--k1)}
+.app:has(#pA_1:checked) .mA .n1{display:inline}
+.app:has(#pA_2:checked) .c-A{order:21;--f:var(--t2);--k:var(--k2)}
+.app:has(#pA_2:checked) .d-A{order:22}
+.app:has(#pA_2:checked) .mA{--f:var(--t2);--k:var(--k2)}
+.app:has(#pA_2:checked) .mA .n2{display:inline}
+.app:has(#pA_3:checked) .c-A{order:31;--f:var(--t3);--k:var(--k3)}
+.app:has(#pA_3:checked) .d-A{order:32}
+.app:has(#pA_3:checked) .mA{--f:var(--t3);--k:var(--k3)}
+.app:has(#pA_3:checked) .mA .n3{display:inline}
+.app:has(#pA_4:checked) .c-A{order:41;--f:var(--t4);--k:var(--k4)}
+.app:has(#pA_4:checked) .d-A{order:42}
+.app:has(#pA_4:checked) .mA{--f:var(--t4);--k:var(--k4)}
+.app:has(#pA_4:checked) .mA .n4{display:inline}
+.app:has(#pA_0:checked) .c-A{order:51;--f:var(--t0);--k:var(--k0)}
+.app:has(#pA_0:checked) .d-A{order:52}
+.app:has(#pA_0:checked) .mA{--f:var(--t0);--k:var(--k0)}
+.app:has(#pA_0:checked) .c-A{border-style:dashed}
+.app:has(#pA_o:checked) :is(.c-A,.d-A,.mA){display:none}
+.app:has(#pA_o:checked) .a-A{display:grid}
+.app:has(#selA:checked) .d-A{display:block}
+.app:has(#selA:checked) .c-A{outline:2.5px solid var(--fg);outline-offset:1px}
+.app:has(#selA:checked) .mA .ring{display:inline}
+.app:has(#selA:checked) .mA .nm{font-weight:700;fill:var(--fg)}
+.app:has(#selA:focus-visible) .c-A{outline:3px solid var(--fg);outline-offset:3px}
+.app:has(#inA:checked) .c-A .n1{display:inline}
+.app:has(#inA:checked) .c-A .n0{display:none}
+.app:not(:has(#pA_2:checked)) .d-A .by1{display:inline}
+.app:not(:has(#pA_2:checked)) .d-A .by0{display:none}
+.app:has(#pC_1:checked) .c-C{order:11;--f:var(--t1);--k:var(--k1)}
+.app:has(#pC_1:checked) .d-C{order:12}
+.app:has(#pC_1:checked) .mC{--f:var(--t1);--k:var(--k1)}
+.app:has(#pC_1:checked) .mC .n1{display:inline}
+.app:has(#pC_2:checked) .c-C{order:21;--f:var(--t2);--k:var(--k2)}
+.app:has(#pC_2:checked) .d-C{order:22}
+.app:has(#pC_2:checked) .mC{--f:var(--t2);--k:var(--k2)}
+.app:has(#pC_2:checked) .mC .n2{display:inline}
+.app:has(#pC_3:checked) .c-C{order:31;--f:var(--t3);--k:var(--k3)}
+.app:has(#pC_3:checked) .d-C{order:32}
+.app:has(#pC_3:checked) .mC{--f:var(--t3);--k:var(--k3)}
+.app:has(#pC_3:checked) .mC .n3{display:inline}
+.app:has(#pC_4:checked) .c-C{order:41;--f:var(--t4);--k:var(--k4)}
+.app:has(#pC_4:checked) .d-C{order:42}
+.app:has(#pC_4:checked) .mC{--f:var(--t4);--k:var(--k4)}
+.app:has(#pC_4:checked) .mC .n4{display:inline}
+.app:has(#pC_0:checked) .c-C{order:51;--f:var(--t0);--k:var(--k0)}
+.app:has(#pC_0:checked) .d-C{order:52}
+.app:has(#pC_0:checked) .mC{--f:var(--t0);--k:var(--k0)}
+.app:has(#pC_0:checked) .c-C{border-style:dashed}
+.app:has(#pC_o:checked) :is(.c-C,.d-C,.mC){display:none}
+.app:has(#pC_o:checked) .a-C{display:grid}
+.app:has(#selC:checked) .d-C{display:block}
+.app:has(#selC:checked) .c-C{outline:2.5px solid var(--fg);outline-offset:1px}
+.app:has(#selC:checked) .mC .ring{display:inline}
+.app:has(#selC:checked) .mC .nm{font-weight:700;fill:var(--fg)}
+.app:has(#selC:focus-visible) .c-C{outline:3px solid var(--fg);outline-offset:3px}
+.app:has(#inC:checked) .c-C .n1{display:inline}
+.app:has(#inC:checked) .c-C .n0{display:none}
+.app:not(:has(#pC_2:checked)) .d-C .by1{display:inline}
+.app:not(:has(#pC_2:checked)) .d-C .by0{display:none}
+.app:has(#pD_1:checked) .c-D{order:11;--f:var(--t1);--k:var(--k1)}
+.app:has(#pD_1:checked) .d-D{order:12}
+.app:has(#pD_1:checked) .mD{--f:var(--t1);--k:var(--k1)}
+.app:has(#pD_1:checked) .mD .n1{display:inline}
+.app:has(#pD_2:checked) .c-D{order:21;--f:var(--t2);--k:var(--k2)}
+.app:has(#pD_2:checked) .d-D{order:22}
+.app:has(#pD_2:checked) .mD{--f:var(--t2);--k:var(--k2)}
+.app:has(#pD_2:checked) .mD .n2{display:inline}
+.app:has(#pD_3:checked) .c-D{order:31;--f:var(--t3);--k:var(--k3)}
+.app:has(#pD_3:checked) .d-D{order:32}
+.app:has(#pD_3:checked) .mD{--f:var(--t3);--k:var(--k3)}
+.app:has(#pD_3:checked) .mD .n3{display:inline}
+.app:has(#pD_4:checked) .c-D{order:41;--f:var(--t4);--k:var(--k4)}
+.app:has(#pD_4:checked) .d-D{order:42}
+.app:has(#pD_4:checked) .mD{--f:var(--t4);--k:var(--k4)}
+.app:has(#pD_4:checked) .mD .n4{display:inline}
+.app:has(#pD_0:checked) .c-D{order:51;--f:var(--t0);--k:var(--k0)}
+.app:has(#pD_0:checked) .d-D{order:52}
+.app:has(#pD_0:checked) .mD{--f:var(--t0);--k:var(--k0)}
+.app:has(#pD_0:checked) .c-D{border-style:dashed}
+.app:has(#pD_o:checked) :is(.c-D,.d-D,.mD){display:none}
+.app:has(#pD_o:checked) .a-D{display:grid}
+.app:has(#selD:checked) .d-D{display:block}
+.app:has(#selD:checked) .c-D{outline:2.5px solid var(--fg);outline-offset:1px}
+.app:has(#selD:checked) .mD .ring{display:inline}
+.app:has(#selD:checked) .mD .nm{font-weight:700;fill:var(--fg)}
+.app:has(#selD:focus-visible) .c-D{outline:3px solid var(--fg);outline-offset:3px}
+.app:has(#inD:checked) .c-D .n1{display:inline}
+.app:has(#inD:checked) .c-D .n0{display:none}
+.app:not(:has(#pD_3:checked)) .d-D .by1{display:inline}
+.app:not(:has(#pD_3:checked)) .d-D .by0{display:none}
+.app:has(#pF_1:checked) .c-F{order:11;--f:var(--t1);--k:var(--k1)}
+.app:has(#pF_1:checked) .d-F{order:12}
+.app:has(#pF_1:checked) .mF{--f:var(--t1);--k:var(--k1)}
+.app:has(#pF_1:checked) .mF .n1{display:inline}
+.app:has(#pF_2:checked) .c-F{order:21;--f:var(--t2);--k:var(--k2)}
+.app:has(#pF_2:checked) .d-F{order:22}
+.app:has(#pF_2:checked) .mF{--f:var(--t2);--k:var(--k2)}
+.app:has(#pF_2:checked) .mF .n2{display:inline}
+.app:has(#pF_3:checked) .c-F{order:31;--f:var(--t3);--k:var(--k3)}
+.app:has(#pF_3:checked) .d-F{order:32}
+.app:has(#pF_3:checked) .mF{--f:var(--t3);--k:var(--k3)}
+.app:has(#pF_3:checked) .mF .n3{display:inline}
+.app:has(#pF_4:checked) .c-F{order:41;--f:var(--t4);--k:var(--k4)}
+.app:has(#pF_4:checked) .d-F{order:42}
+.app:has(#pF_4:checked) .mF{--f:var(--t4);--k:var(--k4)}
+.app:has(#pF_4:checked) .mF .n4{display:inline}
+.app:has(#pF_0:checked) .c-F{order:51;--f:var(--t0);--k:var(--k0)}
+.app:has(#pF_0:checked) .d-F{order:52}
+.app:has(#pF_0:checked) .mF{--f:var(--t0);--k:var(--k0)}
+.app:has(#pF_0:checked) .c-F{border-style:dashed}
+.app:has(#pF_o:checked) :is(.c-F,.d-F,.mF){display:none}
+.app:has(#pF_o:checked) .a-F{display:grid}
+.app:has(#selF:checked) .d-F{display:block}
+.app:has(#selF:checked) .c-F{outline:2.5px solid var(--fg);outline-offset:1px}
+.app:has(#selF:checked) .mF .ring{display:inline}
+.app:has(#selF:checked) .mF .nm{font-weight:700;fill:var(--fg)}
+.app:has(#selF:focus-visible) .c-F{outline:3px solid var(--fg);outline-offset:3px}
+.app:has(#inF:checked) .c-F .n1{display:inline}
+.app:has(#inF:checked) .c-F .n0{display:none}
+.app:not(:has(#pF_3:checked)) .d-F .by1{display:inline}
+.app:not(:has(#pF_3:checked)) .d-F .by0{display:none}
+.app:has(#pE_1:checked) .c-E{order:11;--f:var(--t1);--k:var(--k1)}
+.app:has(#pE_1:checked) .d-E{order:12}
+.app:has(#pE_1:checked) .mE{--f:var(--t1);--k:var(--k1)}
+.app:has(#pE_1:checked) .mE .n1{display:inline}
+.app:has(#pE_2:checked) .c-E{order:21;--f:var(--t2);--k:var(--k2)}
+.app:has(#pE_2:checked) .d-E{order:22}
+.app:has(#pE_2:checked) .mE{--f:var(--t2);--k:var(--k2)}
+.app:has(#pE_2:checked) .mE .n2{display:inline}
+.app:has(#pE_3:checked) .c-E{order:31;--f:var(--t3);--k:var(--k3)}
+.app:has(#pE_3:checked) .d-E{order:32}
+.app:has(#pE_3:checked) .mE{--f:var(--t3);--k:var(--k3)}
+.app:has(#pE_3:checked) .mE .n3{display:inline}
+.app:has(#pE_4:checked) .c-E{order:41;--f:var(--t4);--k:var(--k4)}
+.app:has(#pE_4:checked) .d-E{order:42}
+.app:has(#pE_4:checked) .mE{--f:var(--t4);--k:var(--k4)}
+.app:has(#pE_4:checked) .mE .n4{display:inline}
+.app:has(#pE_0:checked) .c-E{order:51;--f:var(--t0);--k:var(--k0)}
+.app:has(#pE_0:checked) .d-E{order:52}
+.app:has(#pE_0:checked) .mE{--f:var(--t0);--k:var(--k0)}
+.app:has(#pE_0:checked) .c-E{border-style:dashed}
+.app:has(#pE_o:checked) :is(.c-E,.d-E,.mE){display:none}
+.app:has(#pE_o:checked) .a-E{display:grid}
+.app:has(#selE:checked) .d-E{display:block}
+.app:has(#selE:checked) .c-E{outline:2.5px solid var(--fg);outline-offset:1px}
+.app:has(#selE:checked) .mE .ring{display:inline}
+.app:has(#selE:checked) .mE .nm{font-weight:700;fill:var(--fg)}
+.app:has(#selE:focus-visible) .c-E{outline:3px solid var(--fg);outline-offset:3px}
+.app:has(#inE:checked) .c-E .n1{display:inline}
+.app:has(#inE:checked) .c-E .n0{display:none}
+.app:not(:has(#pE_4:checked)) .d-E .by1{display:inline}
+.app:not(:has(#pE_4:checked)) .d-E .by0{display:none}
+.app:has(#pG_1:checked) .c-G{order:11;--f:var(--t1);--k:var(--k1)}
+.app:has(#pG_1:checked) .d-G{order:12}
+.app:has(#pG_1:checked) .mG{--f:var(--t1);--k:var(--k1)}
+.app:has(#pG_1:checked) .mG .n1{display:inline}
+.app:has(#pG_2:checked) .c-G{order:21;--f:var(--t2);--k:var(--k2)}
+.app:has(#pG_2:checked) .d-G{order:22}
+.app:has(#pG_2:checked) .mG{--f:var(--t2);--k:var(--k2)}
+.app:has(#pG_2:checked) .mG .n2{display:inline}
+.app:has(#pG_3:checked) .c-G{order:31;--f:var(--t3);--k:var(--k3)}
+.app:has(#pG_3:checked) .d-G{order:32}
+.app:has(#pG_3:checked) .mG{--f:var(--t3);--k:var(--k3)}
+.app:has(#pG_3:checked) .mG .n3{display:inline}
+.app:has(#pG_4:checked) .c-G{order:41;--f:var(--t4);--k:var(--k4)}
+.app:has(#pG_4:checked) .d-G{order:42}
+.app:has(#pG_4:checked) .mG{--f:var(--t4);--k:var(--k4)}
+.app:has(#pG_4:checked) .mG .n4{display:inline}
+.app:has(#pG_0:checked) .c-G{order:51;--f:var(--t0);--k:var(--k0)}
+.app:has(#pG_0:checked) .d-G{order:52}
+.app:has(#pG_0:checked) .mG{--f:var(--t0);--k:var(--k0)}
+.app:has(#pG_0:checked) .c-G{border-style:dashed}
+.app:has(#pG_o:checked) :is(.c-G,.d-G,.mG){display:none}
+.app:has(#pG_o:checked) .a-G{display:grid}
+.app:has(#selG:checked) .d-G{display:block}
+.app:has(#selG:checked) .c-G{outline:2.5px solid var(--fg);outline-offset:1px}
+.app:has(#selG:checked) .mG .ring{display:inline}
+.app:has(#selG:checked) .mG .nm{font-weight:700;fill:var(--fg)}
+.app:has(#selG:focus-visible) .c-G{outline:3px solid var(--fg);outline-offset:3px}
+.app:has(#inG:checked) .c-G .n1{display:inline}
+.app:has(#inG:checked) .c-G .n0{display:none}
+.app:not(:has(#pG_0:checked)) .d-G .by1{display:inline}
+.app:not(:has(#pG_0:checked)) .d-G .by0{display:none}
+.app:has(#pH_1:checked) .c-H{order:11;--f:var(--t1);--k:var(--k1)}
+.app:has(#pH_1:checked) .d-H{order:12}
+.app:has(#pH_1:checked) .mH{--f:var(--t1);--k:var(--k1)}
+.app:has(#pH_1:checked) .mH .n1{display:inline}
+.app:has(#pH_2:checked) .c-H{order:21;--f:var(--t2);--k:var(--k2)}
+.app:has(#pH_2:checked) .d-H{order:22}
+.app:has(#pH_2:checked) .mH{--f:var(--t2);--k:var(--k2)}
+.app:has(#pH_2:checked) .mH .n2{display:inline}
+.app:has(#pH_3:checked) .c-H{order:31;--f:var(--t3);--k:var(--k3)}
+.app:has(#pH_3:checked) .d-H{order:32}
+.app:has(#pH_3:checked) .mH{--f:var(--t3);--k:var(--k3)}
+.app:has(#pH_3:checked) .mH .n3{display:inline}
+.app:has(#pH_4:checked) .c-H{order:41;--f:var(--t4);--k:var(--k4)}
+.app:has(#pH_4:checked) .d-H{order:42}
+.app:has(#pH_4:checked) .mH{--f:var(--t4);--k:var(--k4)}
+.app:has(#pH_4:checked) .mH .n4{display:inline}
+.app:has(#pH_0:checked) .c-H{order:51;--f:var(--t0);--k:var(--k0)}
+.app:has(#pH_0:checked) .d-H{order:52}
+.app:has(#pH_0:checked) .mH{--f:var(--t0);--k:var(--k0)}
+.app:has(#pH_0:checked) .c-H{border-style:dashed}
+.app:has(#pH_o:checked) :is(.c-H,.d-H,.mH){display:none}
+.app:has(#pH_o:checked) .a-H{display:grid}
+.app:has(#selH:checked) .d-H{display:block}
+.app:has(#selH:checked) .c-H{outline:2.5px solid var(--fg);outline-offset:1px}
+.app:has(#selH:checked) .mH .ring{display:inline}
+.app:has(#selH:checked) .mH .nm{font-weight:700;fill:var(--fg)}
+.app:has(#selH:focus-visible) .c-H{outline:3px solid var(--fg);outline-offset:3px}
+.app:has(#inH:checked) .c-H .n1{display:inline}
+.app:has(#inH:checked) .c-H .n0{display:none}
+.app:has(#pI_1:checked) .c-I{order:11;--f:var(--t1);--k:var(--k1)}
+.app:has(#pI_1:checked) .d-I{order:12}
+.app:has(#pI_1:checked) .mI{--f:var(--t1);--k:var(--k1)}
+.app:has(#pI_1:checked) .mI .n1{display:inline}
+.app:has(#pI_2:checked) .c-I{order:21;--f:var(--t2);--k:var(--k2)}
+.app:has(#pI_2:checked) .d-I{order:22}
+.app:has(#pI_2:checked) .mI{--f:var(--t2);--k:var(--k2)}
+.app:has(#pI_2:checked) .mI .n2{display:inline}
+.app:has(#pI_3:checked) .c-I{order:31;--f:var(--t3);--k:var(--k3)}
+.app:has(#pI_3:checked) .d-I{order:32}
+.app:has(#pI_3:checked) .mI{--f:var(--t3);--k:var(--k3)}
+.app:has(#pI_3:checked) .mI .n3{display:inline}
+.app:has(#pI_4:checked) .c-I{order:41;--f:var(--t4);--k:var(--k4)}
+.app:has(#pI_4:checked) .d-I{order:42}
+.app:has(#pI_4:checked) .mI{--f:var(--t4);--k:var(--k4)}
+.app:has(#pI_4:checked) .mI .n4{display:inline}
+.app:has(#pI_0:checked) .c-I{order:51;--f:var(--t0);--k:var(--k0)}
+.app:has(#pI_0:checked) .d-I{order:52}
+.app:has(#pI_0:checked) .mI{--f:var(--t0);--k:var(--k0)}
+.app:has(#pI_0:checked) .c-I{border-style:dashed}
+.app:has(#pI_o:checked) :is(.c-I,.d-I,.mI){display:none}
+.app:has(#pI_o:checked) .a-I{display:grid}
+.app:has(#selI:checked) .d-I{display:block}
+.app:has(#selI:checked) .c-I{outline:2.5px solid var(--fg);outline-offset:1px}
+.app:has(#selI:checked) .mI .ring{display:inline}
+.app:has(#selI:checked) .mI .nm{font-weight:700;fill:var(--fg)}
+.app:has(#selI:focus-visible) .c-I{outline:3px solid var(--fg);outline-offset:3px}
+.app:has(#inI:checked) .c-I .n1{display:inline}
+.app:has(#inI:checked) .c-I .n0{display:none}
+</style>
+
+<div class="stage">
+<form class="app" id="planner">
+  <button type="submit" disabled hidden></button>
+  <div class="statusbar" aria-hidden="true"><span>11:11</span><i></i><span>5G</span></div>
+  <div class="screen">
+    <div class="inputs"><input type="radio" name="sel" id="selN" aria-label="Close details"><input type="radio" name="sel" id="selB" aria-label="Open Nationalmuseet"><input type="radio" name="pB" id="pB_1" class="r1" checked aria-label="Nationalmuseet: tier 1"><input type="radio" name="pB" id="pB_2" class="r2" aria-label="Nationalmuseet: tier 2"><input type="radio" name="pB" id="pB_3" class="r3" aria-label="Nationalmuseet: tier 3"><input type="radio" name="pB" id="pB_4" class="r4" aria-label="Nationalmuseet: tier 4"><input type="radio" name="pB" id="pB_0" class="r0" aria-label="Nationalmuseet: unsorted"><input type="radio" name="pB" id="pB_o" class="ro" aria-label="Nationalmuseet: remove"><input type="radio" name="sel" id="selA" checked aria-label="Open Glyptotek"><input type="radio" name="pA" id="pA_1" class="r1" aria-label="Glyptotek: tier 1"><input type="radio" name="pA" id="pA_2" class="r2" checked aria-label="Glyptotek: tier 2"><input type="radio" name="pA" id="pA_3" class="r3" aria-label="Glyptotek: tier 3"><input type="radio" name="pA" id="pA_4" class="r4" aria-label="Glyptotek: tier 4"><input type="radio" name="pA" id="pA_0" class="r0" aria-label="Glyptotek: unsorted"><input type="radio" name="pA" id="pA_o" class="ro" aria-label="Glyptotek: remove"><input type="radio" name="sel" id="selC" aria-label="Open Royal Library"><input type="radio" name="pC" id="pC_1" class="r1" aria-label="Royal Library: tier 1"><input type="radio" name="pC" id="pC_2" class="r2" checked aria-label="Royal Library: tier 2"><input type="radio" name="pC" id="pC_3" class="r3" aria-label="Royal Library: tier 3"><input type="radio" name="pC" id="pC_4" class="r4" aria-label="Royal Library: tier 4"><input type="radio" name="pC" id="pC_0" class="r0" aria-label="Royal Library: unsorted"><input type="radio" name="pC" id="pC_o" class="ro" aria-label="Royal Library: remove"><input type="radio" name="sel" id="selD" aria-label="Open Charlottenborg"><input type="radio" name="pD" id="pD_1" class="r1" aria-label="Charlottenborg: tier 1"><input type="radio" name="pD" id="pD_2" class="r2" aria-label="Charlottenborg: tier 2"><input type="radio" name="pD" id="pD_3" class="r3" checked aria-label="Charlottenborg: tier 3"><input type="radio" name="pD" id="pD_4" class="r4" aria-label="Charlottenborg: tier 4"><input type="radio" name="pD" id="pD_0" class="r0" aria-label="Charlottenborg: unsorted"><input type="radio" name="pD" id="pD_o" class="ro" aria-label="Charlottenborg: remove"><input type="radio" name="sel" id="selF" aria-label="Open Parliament"><input type="radio" name="pF" id="pF_1" class="r1" aria-label="Parliament: tier 1"><input type="radio" name="pF" id="pF_2" class="r2" aria-label="Parliament: tier 2"><input type="radio" name="pF" id="pF_3" class="r3" checked aria-label="Parliament: tier 3"><input type="radio" name="pF" id="pF_4" class="r4" aria-label="Parliament: tier 4"><input type="radio" name="pF" id="pF_0" class="r0" aria-label="Parliament: unsorted"><input type="radio" name="pF" id="pF_o" class="ro" aria-label="Parliament: remove"><input type="radio" name="sel" id="selE" aria-label="Open Round Tower"><input type="radio" name="pE" id="pE_1" class="r1" aria-label="Round Tower: tier 1"><input type="radio" name="pE" id="pE_2" class="r2" aria-label="Round Tower: tier 2"><input type="radio" name="pE" id="pE_3" class="r3" aria-label="Round Tower: tier 3"><input type="radio" name="pE" id="pE_4" class="r4" checked aria-label="Round Tower: tier 4"><input type="radio" name="pE" id="pE_0" class="r0" aria-label="Round Tower: unsorted"><input type="radio" name="pE" id="pE_o" class="ro" aria-label="Round Tower: remove"><input type="radio" name="sel" id="selG" aria-label="Open Thorvaldsens"><input type="radio" name="pG" id="pG_1" class="r1" aria-label="Thorvaldsens: tier 1"><input type="radio" name="pG" id="pG_2" class="r2" aria-label="Thorvaldsens: tier 2"><input type="radio" name="pG" id="pG_3" class="r3" aria-label="Thorvaldsens: tier 3"><input type="radio" name="pG" id="pG_4" class="r4" aria-label="Thorvaldsens: tier 4"><input type="radio" name="pG" id="pG_0" class="r0" checked aria-label="Thorvaldsens: unsorted"><input type="radio" name="pG" id="pG_o" class="ro" aria-label="Thorvaldsens: remove"><input type="radio" name="sel" id="selH" aria-label="Open Workers Museum"><input type="radio" name="pH" id="pH_1" class="r1" aria-label="Workers Museum: tier 1"><input type="radio" name="pH" id="pH_2" class="r2" aria-label="Workers Museum: tier 2"><input type="radio" name="pH" id="pH_3" class="r3" aria-label="Workers Museum: tier 3"><input type="radio" name="pH" id="pH_4" class="r4" aria-label="Workers Museum: tier 4"><input type="radio" name="pH" id="pH_0" class="r0" aria-label="Workers Museum: unsorted"><input type="radio" name="pH" id="pH_o" class="ro" checked aria-label="Workers Museum: remove"><input type="radio" name="sel" id="selI" aria-label="Open Nikolaj Kunsthal"><input type="radio" name="pI" id="pI_1" class="r1" aria-label="Nikolaj Kunsthal: tier 1"><input type="radio" name="pI" id="pI_2" class="r2" aria-label="Nikolaj Kunsthal: tier 2"><input type="radio" name="pI" id="pI_3" class="r3" aria-label="Nikolaj Kunsthal: tier 3"><input type="radio" name="pI" id="pI_4" class="r4" aria-label="Nikolaj Kunsthal: tier 4"><input type="radio" name="pI" id="pI_0" class="r0" aria-label="Nikolaj Kunsthal: unsorted"><input type="radio" name="pI" id="pI_o" class="ro" checked aria-label="Nikolaj Kunsthal: remove"></div>
+    <div class="top">
+      <h1>Culture Night <span>Copenhagen</span></h1>
+      <div class="group"><span><i class="av m">M</i><i class="av j">J</i><i class="av s">A</i><i class="av me">You</i></span>
+        <details class="inv"><summary>Invite</summary><p>Anyone with the link can edit the plan.<code>example.link/plan/kn-7f3k</code></p></details>
+      </div>
+    </div>
+    <svg class="map" viewBox="0 0 358 200" role="img" aria-label="Map of the places in the plan, each with its name and tier number"><circle class="bg" cx="107.6" cy="131.0" r="2"/><circle class="bg" cx="150.3" cy="138.2" r="2"/><circle class="bg" cx="176.9" cy="159.0" r="2"/><circle class="bg" cx="101.7" cy="94.2" r="2"/><circle class="bg" cx="223.2" cy="82.6" r="2"/><circle class="bg" cx="170.0" cy="60.7" r="2"/><circle class="bg" cx="162.4" cy="140.0" r="2"/><circle class="bg" cx="123.2" cy="26.0" r="2"/><circle class="bg" cx="135.6" cy="145.3" r="2"/><circle class="bg" cx="114.0" cy="11.6" r="2"/><circle class="bg" cx="114.3" cy="83.6" r="2"/><circle class="bg" cx="153.0" cy="66.4" r="2"/><circle class="bg" cx="154.1" cy="70.2" r="2"/><circle class="bg" cx="142.6" cy="88.9" r="2"/><circle class="bg" cx="224.9" cy="47.5" r="2"/><circle class="bg" cx="142.8" cy="113.7" r="2"/><circle class="bg" cx="93.5" cy="155.9" r="2"/><circle class="bg" cx="67.9" cy="66.3" r="2"/><circle class="bg" cx="76.5" cy="60.3" r="2"/><circle class="bg" cx="173.2" cy="44.5" r="2"/><circle class="bg" cx="144.5" cy="155.2" r="2"/><circle class="bg" cx="147.2" cy="83.6" r="2"/><circle class="bg" cx="233.5" cy="89.7" r="2"/><circle class="bg" cx="166.9" cy="72.6" r="2"/><circle class="bg" cx="121.0" cy="93.6" r="2"/><circle class="bg" cx="168.2" cy="104.9" r="2"/><circle class="bg" cx="131.7" cy="127.6" r="2"/><circle class="bg" cx="164.8" cy="88.1" r="2"/><circle class="bg" cx="206.1" cy="117.5" r="2"/><circle class="bg" cx="136.3" cy="141.1" r="2"/><circle class="bg" cx="135.5" cy="111.3" r="2"/><circle class="bg" cx="205.4" cy="91.5" r="2"/><circle class="bg" cx="193.4" cy="93.9" r="2"/><circle class="bg" cx="189.5" cy="103.8" r="2"/><circle class="bg" cx="152.8" cy="36.3" r="2"/><circle class="bg" cx="161.1" cy="63.8" r="2"/><circle class="bg" cx="125.9" cy="78.6" r="2"/><circle class="bg" cx="148.5" cy="57.8" r="2"/><circle class="bg" cx="117.6" cy="118.1" r="2"/><circle class="bg" cx="127.8" cy="57.7" r="2"/><circle class="bg" cx="161.1" cy="63.8" r="2"/><circle class="bg" cx="140.5" cy="77.9" r="2"/><circle class="bg" cx="141.5" cy="84.2" r="2"/><circle class="bg" cx="234.8" cy="80.9" r="2"/><circle class="bg" cx="171.5" cy="68.1" r="2"/><circle class="bg" cx="111.1" cy="97.3" r="2"/><circle class="bg" cx="140.3" cy="64.2" r="2"/><circle class="bg" cx="120.2" cy="193.1" r="2"/><circle class="bg" cx="123.5" cy="63.1" r="2"/><circle class="bg" cx="121.3" cy="128.8" r="2"/><circle class="bg" cx="121.6" cy="131.1" r="2"/><circle class="bg" cx="147.4" cy="34.6" r="2"/><circle class="bg" cx="148.5" cy="73.3" r="2"/><circle class="bg" cx="176.7" cy="126.4" r="2"/><circle class="bg" cx="176.4" cy="122.5" r="2"/><circle class="bg" cx="183.3" cy="108.4" r="2"/><circle class="bg" cx="179.7" cy="117.7" r="2"/><circle class="bg" cx="191.9" cy="130.4" r="2"/><circle class="bg" cx="185.3" cy="117.1" r="2"/><circle class="bg" cx="184.9" cy="142.2" r="2"/><circle class="bg" cx="178.8" cy="133.7" r="2"/><circle class="bg" cx="174.0" cy="113.2" r="2"/><circle class="bg" cx="199.7" cy="152.0" r="2"/><circle class="bg" cx="175.3" cy="118.3" r="2"/><circle class="bg" cx="210.9" cy="126.2" r="2"/><circle class="bg" cx="174.8" cy="136.2" r="2"/><circle class="bg" cx="179.7" cy="117.7" r="2"/><circle class="bg" cx="211.2" cy="16.8" r="2"/><circle class="bg" cx="161.4" cy="10.5" r="2"/><circle class="bg" cx="198.3" cy="32.3" r="2"/><circle class="bg" cx="212.8" cy="45.4" r="2"/><circle class="bg" cx="246.9" cy="24.0" r="2"/><circle class="bg" cx="259.6" cy="7.9" r="2"/><circle class="bg" cx="250.8" cy="20.8" r="2"/><circle class="bg" cx="290.0" cy="12.1" r="2"/><circle class="bg" cx="237.6" cy="42.3" r="2"/><circle class="bg" cx="256.0" cy="15.3" r="2"/><circle class="bg" cx="253.7" cy="81.3" r="2"/><circle class="bg" cx="243.9" cy="49.3" r="2"/><circle class="bg" cx="214.8" cy="5.9" r="2"/><circle class="bg" cx="276.9" cy="2.3" r="2"/><circle class="bg" cx="248.0" cy="13.0" r="2"/><circle class="bg" cx="258.2" cy="10.5" r="2"/><circle class="bg" cx="224.8" cy="66.0" r="2"/><circle class="bg" cx="223.8" cy="78.6" r="2"/><circle class="bg" cx="266.1" cy="11.3" r="2"/><circle class="bg" cx="246.1" cy="162.3" r="2"/><circle class="bg" cx="312.0" cy="56.5" r="2"/><circle class="bg" cx="247.7" cy="148.3" r="2"/><circle class="bg" cx="285.9" cy="103.3" r="2"/><circle class="bg" cx="331.0" cy="72.6" r="2"/><circle class="bg" cx="272.3" cy="157.3" r="2"/><circle class="bg" cx="244.1" cy="165.2" r="2"/><circle class="bg" cx="174.0" cy="199.3" r="2"/><circle class="bg" cx="57.3" cy="7.5" r="2"/><circle class="bg" cx="31.6" cy="13.5" r="2"/><circle class="bg" cx="117.8" cy="170.1" r="2"/><circle class="bg" cx="168.5" cy="180.1" r="2"/><circle class="bg" cx="86.0" cy="134.6" r="2"/><circle class="bg" cx="59.2" cy="158.9" r="2"/><circle class="bg" cx="132.1" cy="162.0" r="2"/><circle class="bg" cx="55.8" cy="134.9" r="2"/><circle class="bg" cx="76.0" cy="89.5" r="2"/><circle class="bg" cx="45.7" cy="140.4" r="2"/><circle class="bg" cx="56.4" cy="156.7" r="2"/><circle class="bg" cx="60.5" cy="172.1" r="2"/><circle class="bg" cx="44.2" cy="184.8" r="2"/><circle class="bg" cx="29.2" cy="168.4" r="2"/><g class="mB"><circle class="ring" cx="150.3" cy="138.2" r="12.5"/><circle class="mk" cx="150.3" cy="138.2" r="8"/><text class="n n1" x="150.3" y="141.6">1</text><text class="n n2" x="150.3" y="141.6">2</text><text class="n n3" x="150.3" y="141.6">3</text><text class="n n4" x="150.3" y="141.6">4</text><text class="nm" style="text-anchor:end" x="137.3" y="141.6">Nationalmuseet</text></g><g class="mA"><circle class="ring" cx="132.1" cy="162.0" r="12.5"/><circle class="mk" cx="132.1" cy="162.0" r="8"/><text class="n n1" x="132.1" y="165.4">1</text><text class="n n2" x="132.1" y="165.4">2</text><text class="n n3" x="132.1" y="165.4">3</text><text class="n n4" x="132.1" y="165.4">4</text><text class="nm" x="132.1" y="183.0">Glyptotek</text></g><g class="mC"><circle class="ring" cx="199.7" cy="152.0" r="12.5"/><circle class="mk" cx="199.7" cy="152.0" r="8"/><text class="n n1" x="199.7" y="155.4">1</text><text class="n n2" x="199.7" y="155.4">2</text><text class="n n3" x="199.7" y="155.4">3</text><text class="n n4" x="199.7" y="155.4">4</text><text class="nm" style="text-anchor:start" x="212.7" y="155.4">Royal Library</text></g><g class="mD"><circle class="ring" cx="234.8" cy="80.9" r="12.5"/><circle class="mk" cx="234.8" cy="80.9" r="8"/><text class="n n1" x="234.8" y="84.30000000000001">1</text><text class="n n2" x="234.8" y="84.30000000000001">2</text><text class="n n3" x="234.8" y="84.30000000000001">3</text><text class="n n4" x="234.8" y="84.30000000000001">4</text><text class="nm" x="234.8" y="101.9">Charlottenborg</text></g><g class="mF"><circle class="ring" cx="185.3" cy="117.1" r="12.5"/><circle class="mk" cx="185.3" cy="117.1" r="8"/><text class="n n1" x="185.3" y="120.5">1</text><text class="n n2" x="185.3" y="120.5">2</text><text class="n n3" x="185.3" y="120.5">3</text><text class="n n4" x="185.3" y="120.5">4</text><text class="nm" style="text-anchor:start" x="198.3" y="120.5">Parliament</text></g><g class="mE"><circle class="ring" cx="161.1" cy="63.8" r="12.5"/><circle class="mk" cx="161.1" cy="63.8" r="8"/><text class="n n1" x="161.1" y="67.2">1</text><text class="n n2" x="161.1" y="67.2">2</text><text class="n n3" x="161.1" y="67.2">3</text><text class="n n4" x="161.1" y="67.2">4</text><text class="nm" x="161.1" y="84.8">Round Tower</text></g><g class="mG"><circle class="ring" cx="174.0" cy="113.2" r="12.5"/><circle class="mk" cx="174.0" cy="113.2" r="8"/><text class="n n1" x="174.0" y="116.60000000000001">1</text><text class="n n2" x="174.0" y="116.60000000000001">2</text><text class="n n3" x="174.0" y="116.60000000000001">3</text><text class="n n4" x="174.0" y="116.60000000000001">4</text><text class="nm" style="text-anchor:end" x="178.0" y="99.2">Thorvaldsens</text></g><g class="mH"><circle class="ring" cx="123.2" cy="26.0" r="12.5"/><circle class="mk" cx="123.2" cy="26.0" r="8"/><text class="n n1" x="123.2" y="29.4">1</text><text class="n n2" x="123.2" y="29.4">2</text><text class="n n3" x="123.2" y="29.4">3</text><text class="n n4" x="123.2" y="29.4">4</text><text class="nm" x="123.2" y="47.0">Workers Museum</text></g><g class="mI"><circle class="ring" cx="193.4" cy="93.9" r="12.5"/><circle class="mk" cx="193.4" cy="93.9" r="8"/><text class="n n1" x="193.4" y="97.30000000000001">1</text><text class="n n2" x="193.4" y="97.30000000000001">2</text><text class="n n3" x="193.4" y="97.30000000000001">3</text><text class="n n4" x="193.4" y="97.30000000000001">4</text><text class="nm" x="193.4" y="114.9">Nikolaj Kunsthal</text></g></svg>
+    <div class="pool">
+      <div class="th h1" data-s="1"><b>1</b><i class="rule"></i></div><div class="th h2" data-s="2"><b>2</b><i class="rule"></i></div><div class="th h3" data-s="3"><b>3</b><i class="rule"></i></div><div class="th h4" data-s="4"><b>4</b><i class="rule"></i></div><label class="chip c-B" for="selB" data-k="B"><span>Nationalmuseet</span><b class="cnt"><span class="n0">3</span><span class="n1">4</span></b></label><div class="det d-B"><div class="dh"><h3>Nationalmuseet</h3><label class="close" for="selN" aria-label="Close">Close</label></div><p class="hook">Short explorer talks until 21:00, closing party from 22:00</p><p class="facts">Indre By · open to 24:00 · 8 timed sessions</p><div class="who"><span class="avs"><i class="av m">M</i><i class="av j">J</i><i class="av s">A</i><i class="av me">You</i></span><label class="tog"><input type="checkbox" class="inbox" id="inB" checked><span class="off">Join</span><span class="on">I'm in</span></label></div><div class="foot"><span class="by"><span class="by0">Put here by Jonas</span><span class="by1">Moved by you</span></span><details class="rm"><summary>Remove</summary><p>Remove for everyone? <label class="yes" for="pB_o">Yes, remove</label></p></details></div></div><label class="chip c-A" for="selA" data-k="A"><span>Glyptotek</span><b class="cnt"><span class="n0">2</span><span class="n1">3</span></b></label><div class="det d-A"><div class="dh"><h3>The Glyptotek</h3><label class="close" for="selN" aria-label="Close">Close</label></div><p class="hook">Roman Empire tours every 45 min, last at 21:45</p><p class="facts">Vesterbro/Kødbyen · open to 23:55 · 5 timed sessions</p><div class="who"><span class="avs"><i class="av m">M</i><i class="av j">J</i><i class="av me">You</i></span><label class="tog"><input type="checkbox" class="inbox" id="inA" checked><span class="off">Join</span><span class="on">I'm in</span></label></div><p class="note"><i class="av j">J</i><span><b>Jonas</b> Can we grab food on the way?</span></p><div class="foot"><span class="by"><span class="by0">Put here by Mia</span><span class="by1">Moved by you</span></span><details class="rm"><summary>Remove</summary><p>Remove for everyone? <label class="yes" for="pA_o">Yes, remove</label></p></details></div></div><label class="chip c-C" for="selC" data-k="C"><span>Royal Library</span><b class="cnt"><span class="n0">2</span><span class="n1">3</span></b></label><div class="det d-C"><div class="dh"><h3>Royal Danish Library</h3><label class="close" for="selN" aria-label="Close">Close</label></div><p class="hook">Live music on the hour, Reading Room opens every hour at :30</p><p class="facts">Slotsholmen · open to 24:00 · 14 timed sessions</p><div class="who"><span class="avs"><i class="av s">A</i><i class="av m">M</i><i class="av me">You</i></span><label class="tog"><input type="checkbox" class="inbox" id="inC" checked><span class="off">Join</span><span class="on">I'm in</span></label></div><p class="note"><i class="av s">A</i><span><b>Aisha</b> I need to leave by 22:30.</span></p><div class="foot"><span class="by"><span class="by0">Put here by Aisha</span><span class="by1">Moved by you</span></span><details class="rm"><summary>Remove</summary><p>Remove for everyone? <label class="yes" for="pC_o">Yes, remove</label></p></details></div></div><label class="chip c-D" for="selD" data-k="D"><span>Charlottenborg</span><b class="cnt"><span class="n0">1</span><span class="n1">2</span></b></label><div class="det d-D"><div class="dh"><h3>Kunsthal Charlottenborg</h3><label class="close" for="selN" aria-label="Close">Close</label></div><p class="hook">Vocal ensemble concert at 20:00 and 21:30</p><p class="facts">Indre By · open to 24:00 · 4 timed sessions</p><div class="who"><span class="avs"><i class="av j">J</i><i class="av me">You</i></span><label class="tog"><input type="checkbox" class="inbox" id="inD"><span class="off">Join</span><span class="on">I'm in</span></label></div><div class="foot"><span class="by"><span class="by0">Put here by Jonas</span><span class="by1">Moved by you</span></span><details class="rm"><summary>Remove</summary><p>Remove for everyone? <label class="yes" for="pD_o">Yes, remove</label></p></details></div></div><label class="chip c-F" for="selF" data-k="F"><span>Parliament</span><b class="cnt"><span class="n0">2</span><span class="n1">3</span></b></label><div class="det d-F"><div class="dh"><h3>The Danish Parliament</h3><label class="close" for="selN" aria-label="Close">Close</label></div><p class="hook">The Chamber and the Speaker&#x27;s Office, open all evening</p><p class="facts">Slotsholmen · open to 24:00 · 12 timed sessions</p><div class="who"><span class="avs"><i class="av s">A</i><i class="av j">J</i><i class="av me">You</i></span><label class="tog"><input type="checkbox" class="inbox" id="inF"><span class="off">Join</span><span class="on">I'm in</span></label></div><div class="foot"><span class="by"><span class="by0">Put here by Aisha</span><span class="by1">Moved by you</span></span><details class="rm"><summary>Remove</summary><p>Remove for everyone? <label class="yes" for="pF_o">Yes, remove</label></p></details></div></div><label class="chip c-E" for="selE" data-k="E"><span>Round Tower</span><b class="cnt"><span class="n0">1</span><span class="n1">2</span></b></label><div class="det d-E"><div class="dh"><h3>The Round Tower</h3><label class="close" for="selN" aria-label="Close">Close</label></div><p class="hook">The tower lit up, open all evening</p><p class="facts">Indre By · open to 24:00</p><div class="who"><span class="avs"><i class="av m">M</i><i class="av me">You</i></span><label class="tog"><input type="checkbox" class="inbox" id="inE"><span class="off">Join</span><span class="on">I'm in</span></label></div><div class="foot"><span class="by"><span class="by0">Put here by Mia</span><span class="by1">Moved by you</span></span><details class="rm"><summary>Remove</summary><p>Remove for everyone? <label class="yes" for="pE_o">Yes, remove</label></p></details></div></div><label class="chip c-G" for="selG" data-k="G"><span>Thorvaldsens</span><b class="cnt"><span class="n0">1</span><span class="n1">2</span></b></label><div class="det d-G"><div class="dh"><h3>Thorvaldsens Museum</h3><label class="close" for="selN" aria-label="Close">Close</label></div><p class="hook">Light installation on the façade, corridors lit in colour</p><p class="facts">Slotsholmen · open to 24:00</p><div class="who"><span class="avs"><i class="av m">M</i><i class="av me">You</i></span><label class="tog"><input type="checkbox" class="inbox" id="inG"><span class="off">Join</span><span class="on">I'm in</span></label></div><div class="foot"><span class="by"><span class="by0">Put here by Mia</span><span class="by1">Moved by you</span></span><details class="rm"><summary>Remove</summary><p>Remove for everyone? <label class="yes" for="pG_o">Yes, remove</label></p></details></div></div><label class="chip c-H" for="selH" data-k="H"><span>Workers Museum</span><b class="cnt"><span class="n0">0</span><span class="n1">1</span></b></label><div class="det d-H"><div class="dh"><h3>The Workers Museum</h3><label class="close" for="selN" aria-label="Close">Close</label></div><p class="hook">The Roaring Twenties</p><p class="facts">Indre By · open to 24:00 · 8 timed sessions</p><div class="who"><span class="avs"><i class="av me">You</i></span><label class="tog"><input type="checkbox" class="inbox" id="inH"><span class="off">Join</span><span class="on">I'm in</span></label></div><div class="foot"><span class="by"><span class="by1" style="display:inline">Added by you</span></span><details class="rm"><summary>Remove</summary><p>Remove for everyone? <label class="yes" for="pH_o">Yes, remove</label></p></details></div></div><label class="chip c-I" for="selI" data-k="I"><span>Nikolaj Kunsthal</span><b class="cnt"><span class="n0">0</span><span class="n1">1</span></b></label><div class="det d-I"><div class="dh"><h3>Nikolaj Kunsthal</h3><label class="close" for="selN" aria-label="Close">Close</label></div><p class="hook">Exhibitions, a creative art space and tower tours</p><p class="facts">Indre By · open to 24:00</p><div class="who"><span class="avs"><i class="av me">You</i></span><label class="tog"><input type="checkbox" class="inbox" id="inI"><span class="off">Join</span><span class="on">I'm in</span></label></div><div class="foot"><span class="by"><span class="by1" style="display:inline">Added by you</span></span><details class="rm"><summary>Remove</summary><p>Remove for everyone? <label class="yes" for="pI_o">Yes, remove</label></p></details></div></div>
+      <div class="th h0" data-s="0"><b>?</b><span>Unsorted</span></div>
+      <details class="add"><summary>Add a place</summary><ul><li class="arow a-B"><div><h3>Nationalmuseet</h3><p class="hook">Short explorer talks until 21:00, closing party from 22:00</p></div><label class="tog" for="pB_0">Add</label></li><li class="arow a-A"><div><h3>The Glyptotek</h3><p class="hook">Roman Empire tours every 45 min, last at 21:45</p></div><label class="tog" for="pA_0">Add</label></li><li class="arow a-C"><div><h3>Royal Danish Library</h3><p class="hook">Live music on the hour, Reading Room opens every hour at :30</p></div><label class="tog" for="pC_0">Add</label></li><li class="arow a-D"><div><h3>Kunsthal Charlottenborg</h3><p class="hook">Vocal ensemble concert at 20:00 and 21:30</p></div><label class="tog" for="pD_0">Add</label></li><li class="arow a-F"><div><h3>The Danish Parliament</h3><p class="hook">The Chamber and the Speaker&#x27;s Office, open all evening</p></div><label class="tog" for="pF_0">Add</label></li><li class="arow a-E"><div><h3>The Round Tower</h3><p class="hook">The tower lit up, open all evening</p></div><label class="tog" for="pE_0">Add</label></li><li class="arow a-G"><div><h3>Thorvaldsens Museum</h3><p class="hook">Light installation on the façade, corridors lit in colour</p></div><label class="tog" for="pG_0">Add</label></li><li class="arow a-H"><div><h3>The Workers Museum</h3><p class="hook">The Roaring Twenties</p></div><label class="tog" for="pH_0">Add</label></li><li class="arow a-I"><div><h3>Nikolaj Kunsthal</h3><p class="hook">Exhibitions, a creative art space and tower tours</p></div><label class="tog" for="pI_0">Add</label></li><li class="empty">Everything from this short list is in the plan.</li></ul></details>
+    </div>
+  </div>
+</form>
+</div>
+
+<script>
+(function () {
+  var app = document.querySelector('.app'), pool = document.querySelector('.pool'), screen = document.querySelector('.screen');
+  if (!app || !pool) return;
+  var pending = null, drag = null, raf = 0;
+
+  function stateOf(k) { var r = app.querySelector('input[name="p' + k + '"]:checked'); return r ? r.id.split('_')[1] : null; }
+  function zones() {
+    var hs = Array.prototype.map.call(pool.querySelectorAll('.th'), function (h) { return { h: h, top: h.getBoundingClientRect().top }; })
+      .sort(function (a, b) { return a.top - b.top; });
+    var bottom = pool.getBoundingClientRect().bottom;
+    return hs.map(function (z, i) { return { h: z.h, top: z.top - 6, bot: i < hs.length - 1 ? hs[i + 1].top - 6 : bottom }; });
+  }
+  function begin(chip, x, y) {
+    var r = chip.getBoundingClientRect(), g = chip.cloneNode(true);
+    g.removeAttribute('for'); g.classList.add('ghost'); g.style.width = r.width + 'px';
+    app.appendChild(g); chip.classList.add('lift'); app.classList.add('dragging');
+    drag = { chip: chip, k: chip.dataset.k, ghost: g, dx: x - r.left, dy: y - r.top, x: x, y: y, target: null };
+    place(); tick();
+  }
+  function place() {
+    if (!drag) return;
+    drag.ghost.style.left = (drag.x - drag.dx) + 'px'; drag.ghost.style.top = (drag.y - drag.dy) + 'px';
+    var hit = null, cur = stateOf(drag.k);
+    zones().forEach(function (z) { if (drag.y >= z.top && drag.y < z.bot) hit = z.h; });
+    if (hit && hit.dataset.s === cur) hit = null;
+    if (drag.target !== hit) { if (drag.target) drag.target.classList.remove('drop'); if (hit) hit.classList.add('drop'); drag.target = hit; }
+  }
+  function tick() {
+    if (!drag) return;
+    var r = screen.getBoundingClientRect(), edge = 70, before = screen.scrollTop;
+    if (drag.y < r.top + edge) screen.scrollTop -= 9; else if (drag.y > r.bottom - edge) screen.scrollTop += 9;
+    if (screen.scrollTop !== before) place();
+    raf = requestAnimationFrame(tick);
+  }
+  function finish(commit) {
+    if (!drag) return;
+    cancelAnimationFrame(raf);
+    if (commit && drag.target) { var radio = document.getElementById('p' + drag.k + '_' + drag.target.dataset.s); if (radio) radio.checked = true; }
+    if (drag.target) drag.target.classList.remove('drop');
+    drag.ghost.remove(); drag.chip.classList.remove('lift'); app.classList.remove('dragging'); drag = null;
+  }
+  function clearPending() { if (pending) { clearTimeout(pending.timer); pending = null; } }
+
+  // Mouse: drag starts after a small movement
+  pool.addEventListener('mousedown', function (e) {
+    var chip = e.target.closest('.chip'); if (!chip || e.button !== 0) return;
+    pending = { chip: chip, x: e.clientX, y: e.clientY, mouse: true };
+  });
+  document.addEventListener('mousemove', function (e) {
+    if (pending && pending.mouse && !drag && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 6) { begin(pending.chip, e.clientX, e.clientY); }
+    if (drag) { e.preventDefault(); drag.x = e.clientX; drag.y = e.clientY; place(); }
+  });
+  document.addEventListener('mouseup', function () {
+    if (drag) {
+      finish(true);
+      var swallow = function (ev) { ev.preventDefault(); ev.stopPropagation(); };
+      document.addEventListener('click', swallow, { capture: true, once: true });
+      setTimeout(function () { document.removeEventListener('click', swallow, true); }, 0);
+    }
+    clearPending();
+  });
+  pool.addEventListener('dragstart', function (e) { e.preventDefault(); });
+  pool.addEventListener('contextmenu', function (e) { if (e.target.closest('.chip')) e.preventDefault(); });
+
+  // Touch: press and hold to pick a chip up, so a plain swipe still scrolls
+  pool.addEventListener('touchstart', function (e) {
+    var chip = e.target.closest('.chip'); if (!chip || e.touches.length !== 1) return;
+    var t = e.touches[0];
+    pending = { chip: chip, x: t.clientX, y: t.clientY, timer: setTimeout(function () {
+      if (!pending) return;
+      begin(pending.chip, pending.x, pending.y);
+      try { if (navigator.vibrate) navigator.vibrate(10); } catch (err) {}
+    }, 280) };
+  }, { passive: true });
+  document.addEventListener('touchmove', function (e) {
+    var t = e.touches[0];
+    if (drag) { e.preventDefault(); drag.x = t.clientX; drag.y = t.clientY; place(); return; }
+    if (pending && !pending.mouse) { if (Math.hypot(t.clientX - pending.x, t.clientY - pending.y) > 10) clearPending(); else { pending.x = t.clientX; pending.y = t.clientY; } }
+  }, { passive: false });
+  function touchDone(commit) { return function (e) { if (drag) { e.preventDefault(); finish(commit); } clearPending(); }; }
+  document.addEventListener('touchend', touchDone(true), { passive: false });
+  document.addEventListener('touchcancel', touchDone(false), { passive: false });
+})();
+</script>
+
+</body>
+</html>

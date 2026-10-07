@@ -39,7 +39,10 @@ jobs:
         run: pnpm run fetch
         continue-on-error: ${{ github.event_name != 'schedule' }}
 
+      # Where shared plans sync (see sync-server/). Unset, the public Automerge server is used.
       - run: pnpm run build
+        env:
+          VITE_SYNC_URL: ${{ vars.VITE_SYNC_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build

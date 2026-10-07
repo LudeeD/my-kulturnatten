@@ -1,2 +1,4 @@
-onlyBuiltDependencies:
-  - esbuild
+allowBuilds:
+  esbuild: true
+  # Optional native speed-up for a dependency of Automerge; only used in Node.
+  cbor-extract: false

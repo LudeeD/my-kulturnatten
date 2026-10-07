@@ -3,12 +3,13 @@
 	import EventCard from './EventCard.svelte';
 
 	const t = $derived(planner.t);
-	const arrival = $derived(planner.arrival);
 	let filtersOpen = $state(false);
-	let listMenuOpen = $state(false);
-	/** The list name being typed, for a new list or a rename. */
-	let editing = $state<'new' | 'rename' | null>(null);
-	let draft = $state('');
+
+	function showMap() {
+		// The map shows what the search and filters leave, to be added from there.
+		planner.hideOthers = false;
+		planner.bigMap = true;
+	}
 
 	const collator = new Intl.Collator('da');
 	const areas = $derived([...new Set(planner.events.map((e) => e.area))].sort(collator.compare));
@@ -34,165 +35,68 @@
 		}
 		lastOpened = id;
 	});
-
-	function startEditing(mode: 'new' | 'rename') {
-		listMenuOpen = false;
-		draft = mode === 'rename' ? planner.listName(planner.active) : '';
-		editing = mode;
-	}
-
-	function saveName(e: SubmitEvent) {
-		e.preventDefault();
-		if (!draft.trim()) return;
-		if (editing === 'new') planner.newList(draft);
-		else planner.renameActive(draft);
-		editing = null;
-	}
-
-	function raiseSheet() {
-		if (planner.sheet === 'peek') planner.sheet = 'full';
-	}
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col">
-	<!-- First visit. Above everything else so it fits in the half-open sheet on a phone. -->
-	{#if planner.showHint}
-		<div
-			class="mx-3 mb-3 shrink-0 rounded-xl border border-pick p-3 text-[0.95rem] md:mt-3 md:mb-0"
-		>
-			<h2 class="font-bold">{arrival ? t.arrivalTitle(arrival.name) : t.welcomeTitle}</h2>
-			<ol class="mt-2 space-y-1.5">
-				{#each arrival ? t.arrivalSteps(arrival.count) : t.welcomeSteps as step, i (i)}
-					<li class="flex gap-3">
-						<span
-							class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-pick text-sm font-bold text-pick-ink"
-						>
-							{i + 1}
-						</span>
-						<span>{step}</span>
-					</li>
-				{/each}
-			</ol>
-			<button
-				type="button"
-				class="btn btn-primary mt-3 w-full"
-				onclick={() => planner.dismissHint()}
-			>
-				{t.gotIt}
-			</button>
-		</div>
-	{/if}
-	<div class="space-y-2 px-3 pb-2 md:pt-3">
-		<div class="grid grid-cols-2 gap-1 rounded-xl bg-bg p-1" role="group">
-			<button
-				type="button"
-				class="tab"
-				aria-pressed={!planner.picksOnly}
-				onclick={() => (planner.picksOnly = false)}
-			>
-				{t.all} <span class="tabular-nums opacity-70">{planner.events.length}</span>
-			</button>
-			<button
-				type="button"
-				class="tab flex min-w-0 items-center justify-center gap-1.5 px-2"
-				aria-pressed={planner.picksOnly}
-				onclick={() => (planner.picksOnly = true)}
-			>
-				<span class="truncate">
-					★ {planner.shared ? t.sharedList : t.myLists}
-				</span>
-				<span class="tabular-nums opacity-70">{planner.picks.size}</span>
-			</button>
-		</div>
-
-		{#if planner.picksOnly && !planner.shared}
-			{#if editing}
-				<form class="flex gap-1.5 [&>.btn]:px-3" onsubmit={saveName}>
-					<!-- svelte-ignore a11y_autofocus -->
-					<input
-						class="field min-w-0 flex-1"
-						aria-label={t.listName}
-						placeholder={t.listName}
-						maxlength="40"
-						autofocus
-						bind:value={draft}
-					/>
-					<button type="submit" class="btn btn-primary">{t.save}</button>
-					<button type="button" class="btn" onclick={() => (editing = null)}>{t.cancel}</button>
-				</form>
-			{:else}
-				<div class="relative flex gap-1.5">
-					<select
-						class="field min-w-0 flex-1"
-						aria-label={t.lists}
-						value={planner.activeId}
-						onchange={(e) => planner.setActive(e.currentTarget.value)}
-					>
-						{#each planner.lists as list (list.id)}
-							<option value={list.id}>{planner.listName(list)} ({list.picks.length})</option>
-						{/each}
-					</select>
-					<button
-						type="button"
-						class="btn w-12 px-0"
-						aria-label={t.listOptions}
-						aria-expanded={listMenuOpen}
-						onclick={() => (listMenuOpen = !listMenuOpen)}
-					>
-						<svg viewBox="0 0 24 24" class="size-6" fill="currentColor" aria-hidden="true">
-							<circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" />
-							<circle cx="19" cy="12" r="2" />
-						</svg>
-					</button>
-					{#if listMenuOpen}
-						<div
-							class="absolute top-full right-0 z-10 mt-1.5 w-52 rounded-xl border border-line bg-raised p-1 shadow-lg"
-						>
-							<button type="button" class="menu-item" onclick={() => startEditing('new')}>
-								{t.newList}
-							</button>
-							<button type="button" class="menu-item" onclick={() => startEditing('rename')}>
-								{t.renameList}
-							</button>
-							<button
-								type="button"
-								class="menu-item text-warn"
-								onclick={() => {
-									listMenuOpen = false;
-									planner.deleteActive();
-								}}
-							>
-								{t.deleteList}
-							</button>
-						</div>
-					{/if}
-				</div>
-			{/if}
-		{/if}
-
+	<div class="space-y-2 px-3 pt-3 pb-2">
 		<div class="flex gap-2">
+			<button
+				type="button"
+				class="btn btn-icon shrink-0"
+				aria-label="{t.back}: {t.plan}"
+				onclick={() => (planner.view = 'plan')}
+			>
+				<svg viewBox="0 0 24 24" class="size-6" aria-hidden="true">
+					<path
+						d="M15 5l-7 7 7 7"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2.2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</button>
 			<input
 				type="search"
 				class="field min-w-0 flex-1"
 				placeholder={t.search}
 				aria-label={t.search}
 				bind:value={planner.query}
-				onfocus={raiseSheet}
 			/>
 			<button
 				type="button"
 				class="btn shrink-0"
 				aria-expanded={filtersOpen}
-				onclick={() => {
-					filtersOpen = !filtersOpen;
-					raiseSheet();
-				}}
+				onclick={() => (filtersOpen = !filtersOpen)}
 			>
 				{t.filters}{#if planner.activeFilters}
 					<span class="ml-1 rounded-full bg-pick px-1.5 text-sm font-bold text-pick-ink">
 						{planner.activeFilters}
 					</span>
 				{/if}
+			</button>
+			<!-- Phone: places can be picked from the map as well. From 768px it is already beside the list. -->
+			<button
+				type="button"
+				class="btn btn-icon shrink-0 md:hidden"
+				aria-label={t.openMap}
+				title={t.openMap}
+				onclick={showMap}
+			>
+				<svg
+					viewBox="0 0 24 24"
+					class="size-6"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<path d="M9 4L3 6.5v13.5l6-2.5 6 2.5 6-2.5V4l-6 2.5z" />
+					<path d="M9 4v13.5M15 6.5V20" />
+				</svg>
 			</button>
 		</div>
 
@@ -207,12 +111,12 @@
 					{#each types as type (type)}<option value={type}>{planner.label(type)}</option>{/each}
 				</select>
 				<div class="flex items-center justify-between gap-2">
-					<label class="flex min-h-12 items-center gap-3">
+					<label class="flex min-h-10 items-center gap-3">
 						<input type="checkbox" class="size-6 accent-pick" bind:checked={planner.childOnly} />
 						{t.childFriendly}
 					</label>
 					{#if planner.activeFilters || planner.query}
-						<button type="button" class="link min-h-12" onclick={() => planner.clearFilters()}>
+						<button type="button" class="link" onclick={() => planner.clearFilters()}>
 							{t.clearFilters}
 						</button>
 					{/if}
@@ -235,9 +139,7 @@
 		{#each planner.filtered as event (event.id)}
 			<EventCard {event} />
 		{:else}
-			<li class="px-4 py-8 text-center text-muted">
-				{planner.picksOnly && planner.picks.size === 0 ? t.noPicks : t.noResults}
-			</li>
+			<li class="px-4 py-8 text-center text-muted">{t.noResults}</li>
 		{/each}
 		<li class="px-4 py-6 text-center text-sm text-muted">
 			{t.dataNote}

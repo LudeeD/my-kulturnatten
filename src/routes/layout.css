@@ -1,21 +1,35 @@
 @import 'tailwindcss';
 
-/* One dark theme: the app is meant for a phone outdoors at night. */
+/* Light or dark with the system. The map (MapView) follows the same choice. */
 @theme {
-	--color-bg: #0b0d12;
-	--color-panel: #12151c;
-	--color-raised: #1c212b;
-	--color-line: #343c4c;
-	--color-fg: #f3f5f9;
-	--color-muted: #aeb6c5;
-	--color-pick: #ffc53d;
-	--color-pick-ink: #1c1400;
-	--color-link: #7dd3fc;
-	--color-warn: #ffb59e;
+	--color-bg: #e9edf7;
+	--color-panel: #f4f6fb;
+	--color-raised: #ffffff;
+	--color-line: #c3cbe0;
+	--color-fg: #121a33;
+	--color-muted: #56617f;
+	--color-pick: #f5b83d;
+	--color-pick-ink: #2a1c00;
+	--color-link: #1d4fbf;
+	--color-warn: #a8362c;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--color-bg: #0e1630;
+		--color-panel: #131c3a;
+		--color-raised: #18223f;
+		--color-line: #34416a;
+		--color-fg: #eef0f8;
+		--color-muted: #a0abc8;
+		--color-pick: #ffc857;
+		--color-link: #8fc1ff;
+		--color-warn: #ff9a8a;
+	}
 }
 
 html {
-	color-scheme: dark;
+	color-scheme: light dark;
 }
 
 body {
@@ -34,7 +48,7 @@ body {
 @layer components {
 	.btn {
 		display: inline-flex;
-		min-height: 3rem;
+		min-height: 2.5rem;
 		align-items: center;
 		justify-content: center;
 		border-radius: 0.75rem;
@@ -58,14 +72,14 @@ body {
 	}
 	/* Square icon-only button, for the controls floating on the map. */
 	.btn-icon {
-		width: 2.75rem;
-		min-height: 2.75rem;
+		width: 2.5rem;
+		min-height: 2.5rem;
 		padding: 0;
 	}
 	.menu-item {
 		display: flex;
 		width: 100%;
-		min-height: 3rem;
+		min-height: 2.5rem;
 		align-items: center;
 		border-radius: 0.6rem;
 		padding: 0 0.75rem;
@@ -83,16 +97,47 @@ body {
 		color: var(--color-fg);
 	}
 	.field {
-		min-height: 3rem;
+		min-height: 2.5rem;
 		border-radius: 0.75rem;
 		border: 1px solid var(--color-line);
-		background: var(--color-bg);
+		background: var(--color-raised);
 		padding: 0 0.875rem;
 		/* 16px keeps iOS from zooming the page when the field gets focus. */
 		font-size: 1rem;
 	}
 	.field::placeholder {
 		color: var(--color-muted);
+	}
+	/* A place in the plan. Its fill comes from its tier. */
+	.chip {
+		display: inline-flex;
+		max-width: 100%;
+		min-height: 2.25rem;
+		align-items: center;
+		gap: 0.4rem;
+		border-radius: 999px;
+		border: 1.5px solid var(--color-muted);
+		padding: 0 0.8rem;
+		font-size: 0.9rem;
+		font-weight: 600;
+		/* A long press lifts the chip: no text selection, no iOS callout. */
+		user-select: none;
+		-webkit-user-select: none;
+		-webkit-touch-callout: none;
+	}
+	/* A lifted chip wobbles in the hand and lands with a small bounce. */
+	@media (prefers-reduced-motion: no-preference) {
+		.chip-lifted {
+			animation: chip-wobble 0.45s ease-in-out infinite;
+		}
+		.chip-landed {
+			animation: chip-land 0.3s cubic-bezier(0.3, 1.6, 0.5, 1);
+		}
+	}
+	/* A tier nothing is in yet. The tiers in use are filled by PlanView. */
+	.spare {
+		border-color: var(--color-muted);
+		border-style: dashed;
 	}
 	.link {
 		display: inline-flex;
@@ -105,7 +150,15 @@ body {
 	}
 }
 
-/* MapLibre's popup and attribution, restyled for the dark theme. */
+/* The small map's rounded corners. The radius goes on the drawing surface itself: clipping
+   it from a parent is not honoured by every browser for a WebGL canvas. */
+.small-map,
+.small-map .maplibregl-canvas-container,
+.small-map .maplibregl-canvas {
+	border-radius: calc(1rem - 1px);
+}
+
+/* MapLibre's popup and attribution, restyled for the theme. */
 .maplibregl-map .maplibregl-popup-content {
 	border: 1px solid var(--color-line);
 	border-radius: 0.9rem;
@@ -115,7 +168,7 @@ body {
 	font-family: var(--default-font-family);
 	font-size: 0.95rem;
 	line-height: 1.4;
-	box-shadow: 0 10px 30px rgb(0 0 0 / 0.7);
+	box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
 }
 .maplibregl-map .maplibregl-popup-anchor-top .maplibregl-popup-tip,
 .maplibregl-map .maplibregl-popup-anchor-top-left .maplibregl-popup-tip,
@@ -133,10 +186,35 @@ body {
 .maplibregl-map .maplibregl-popup-anchor-right .maplibregl-popup-tip {
 	border-left-color: var(--color-raised);
 }
-.maplibregl-map .maplibregl-ctrl-attrib {
-	background: rgb(11 13 18 / 0.8);
+.maplibregl-map .maplibregl-ctrl.maplibregl-ctrl-attrib {
+	background: color-mix(in srgb, var(--color-raised) 85%, transparent);
 	color: var(--color-muted);
+}
+/* On the small map it is a pill set in from the corner. Flush in the corner, in the page's own
+   colour, it hid the map's rounding there. */
+.small-map .maplibregl-ctrl.maplibregl-ctrl-attrib {
+	margin: 6px;
+	border-radius: 999px;
+	padding: 0 8px;
 }
 .maplibregl-map .maplibregl-ctrl-attrib a {
 	color: var(--color-fg);
+}
+
+@keyframes chip-wobble {
+	0%,
+	100% {
+		rotate: -3deg;
+	}
+	50% {
+		rotate: 2deg;
+	}
+}
+@keyframes chip-land {
+	from {
+		scale: 1.18;
+	}
+	to {
+		scale: 1;
+	}
 }

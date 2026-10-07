@@ -1,0 +1,21 @@
+# The sync server for shared plans. Caddy proxies a public hostname to this port.
+services:
+  sync:
+    build: .
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:3030:3030'
+    environment:
+      ALLOWED_ORIGINS: https://kulturnatten.luissilva.eu
+    volumes:
+      - data:/data
+    # The machine is small and shared: a flood slows this down, not everything else.
+    mem_limit: 192m
+    cpus: 0.5
+    logging:
+      options:
+        max-size: 10m
+        max-file: '3'
+
+volumes:
+  data:
